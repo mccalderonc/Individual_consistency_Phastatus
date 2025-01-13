@@ -307,7 +307,7 @@ ggsave(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis
 ### Plot example of aispeed of one individual
 ```{r}
 # plot using stamen map from Bocas
-register_stadiamaps("3a58670b-0653-4668-bb0c-f9e5454596e7") 
+register_stadiamaps("") 
 
 # create a bounding box
 e <- make_bbox(location.long, location.lat, data =windall_df)

@@ -897,7 +897,7 @@ DATA_idday_sf <- tele.idday.feb[names(tele.idday.feb) %in% unique(UD_idday_sf$id
   st_transform(crs = "+proj=longlat +datum=WGS84")
 
 # register stamen map
-register_stadiamaps("3a58670b-0653-4668-bb0c-f9e5454596e7") 
+register_stadiamaps("") 
 
 # create a bounding box
 e <- make_bbox(location_long, location_lat, data = bats_feb, f = .70)
@@ -1038,7 +1038,7 @@ DATA_2022_sf <- tele2022[names(tele2022) %in% unique(UD_2022_sf$id)==TRUE] %>%
   st_transform(crs = "+proj=longlat +datum=WGS84")
 
 # register stamen map
-register_stadiamaps("3a58670b-0653-4668-bb0c-f9e5454596e7") 
+register_stadiamaps("") 
 
 # create a bounding box
 e <- make_bbox(location_long, location_lat, data = aftermarch, f = .70)
@@ -1132,7 +1132,7 @@ DATA_2023_sf <- tele2023[names(tele2023) %in% unique(UD_2023_sf$id)==TRUE] %>%
   st_transform(crs = "+proj=longlat +datum=WGS84")
 
 # register stamen map
-register_stadiamaps("3a58670b-0653-4668-bb0c-f9e5454596e7") 
+register_stadiamaps("") 
 
 # create a bounding box
 e <- make_bbox(location_long, location_lat, data = aftermarch, f = .70)

@@ -20,7 +20,7 @@ bocas_filtered <- bocas %>%
   filter(year_cave=="2022_ajcave"|year_cave=="2022_lagruta_Feb"| year_cave=="2023_ajcave")
 
 # plot using stamen map from Bocas
-register_stadiamaps("3a58670b-0653-4668-bb0c-f9e5454596e7") 
+register_stadiamaps("") 
 
 # create a bounding box
 e <- make_bbox(location_long, location_lat, data = bocas_filtered)
