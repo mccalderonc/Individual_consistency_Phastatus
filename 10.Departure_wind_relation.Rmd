@@ -1,0 +1,1043 @@
+---
+title: "Departures_wind"
+author: "Camila Calderon"
+date: "2024-11-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+pacman::p_load(move, lubridate,ggplot2,tidyverse,mapview, circular)
+```
+
+
+```{r loadd}
+### Load outbound and inbound commutes
+allpaths <- read.csv(file = "/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allout_inbound_paths.csv")
+#order data
+allpaths <- allpaths[order(allpaths$tag_local_identifier, allpaths$timestamp),]
+
+# read wind data
+windall_df <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allpaths_winddata.csv")
+```
+
+### Filter data frame
+
+```{r}
+windall_df_sub <- windall_df %>%
+  filter(date(timestamp)<"2022-02-14")
+
+windall_out_df <- windall_df %>%
+  filter(direc=="outbound")
+
+windall_in_df <- windall_df %>%
+  filter(direc=="inbound")
+
+```
+
+### Summarise wind parameters by path direction and individual night
+
+This values will be used later to test how wind support, wind speed, cross wind and wind direction affect departures and path shape of the bats
+
+```{r}
+# calculate mean and variance of wind speed, cw, ws and wd for both outbound and inbound commutes
+meanwind <- windall_df_sub %>%
+  group_by(direc, ID) %>%
+  dplyr::summarise(meanwind=mean(wind.speed), varwind=var(wind.speed), meanws=mean(ws), varws=var(ws), meancw=mean(cw_abs),varcw=var(cw_abs), meanwd=mean(wind_dire), varwd=var(wind_dire))
+ 
+# Extract first row for in individual night to extract wind parameters at departure
+windfirst <- windall_df_sub %>% 
+  group_by(direc, ID) %>%
+  slice(which.min(1:n()))
+
+# extract wind speed at departure
+meanwind$windstart <- windfirst$wind.speed
+meanwind$ws_dep <- windfirst$ws
+meanwind$cw_dep <- abs(windfirst$cw)
+meanwind$wd_dep <- windfirst$wind_dire
+
+# Split dataframe by outbound and inbound commutes
+meanwind_out <- meanwind[meanwind$direc=="outbound",]
+meanwind_in <- meanwind[meanwind$direc=="inbound",]
+```
+
+### Match wind parameters to departures and return data of the bats in February 2022
+
+```{r}
+# load departures and returns in feb 
+depfeb <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_feb.csv")
+# load departure time difference after sunset 
+dep_sunset <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_feb.csv")
+
+#load all departures and returns including illumination data
+deps_sunset_all <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_febmarch_illumination.csv")
+deps_sunset_all$ID <- paste(deps_sunset_all$tag_local_identifier, deps_sunset_all$date, sep="_")
+
+# extract departure by id in feb
+depfeb_first <- depfeb[,c("ID", "timestamp")]
+depfeb_first$direc <- "outbound"
+# match wind parameters to the departure data
+depfeb_first$meanwind <-  meanwind_out$meanwind[match(depfeb_first$ID,meanwind_out$ID)]
+depfeb_first$windstart <-  meanwind_out$windstart[match(depfeb_first$ID,meanwind_out$ID)]
+depfeb_first$varwind <-  meanwind_out$varwind[match(depfeb_first$ID,meanwind_out$ID)]
+
+# filter data remove date less than two data points
+dep_sunset <- dep_sunset%>%
+  filter(date<"2022-02-13")
+
+# match departure difference after sunset to the wind parameters
+dep_sunset$meanwind <-  meanwind_out$meanwind[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$windstart <-  meanwind_out$windstart[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$varwind <-  meanwind_out$varwind[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$meanws <- meanwind_out$meanws[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$ws_dep <- meanwind_out$ws_dep[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$varws <- meanwind_out$varws[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$meancw <- meanwind_out$meancw[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$cw_dep <- meanwind_out$cw_dep[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$varcw <- meanwind_out$varcw[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$meanwd <- meanwind_out$meanwd[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$wd_dep <- meanwind_out$wd_dep[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$varwd <- meanwind_out$varwd[match(dep_sunset$ID,meanwind_out$ID)]
+dep_sunset$ilu <- deps_sunset_all$illumination[match(dep_sunset$ID, deps_sunset_all$ID)]
+```
+
+### Extract wind data for march
+```{r}
+#load wind data for march
+winddir <- read.csv(file = "~/ownCloud/PhDLife/P.hastatus/2021-10-Camila-secondseason/Analysis/data/bocas_tower_wdvm_elect_2.csv")
+head(winddir)
+windsp <- read.csv(file = "~/ownCloud/PhDLife/P.hastatus/2021-10-Camila-secondseason/Analysis/data/bocas_tower_wsmn_elect_2.csv")
+head(windsp)
+
+# convert timestamp to posixct
+winddir$timestamp <- as.POSIXct(winddir$datetime, format = "%d/%m/%Y %H:%M:%S", tz = "America/Panama")
+windsp$timestamp <- as.POSIXct(windsp$datetime, format = "%d/%m/%Y %H:%M:%S", tz = "America/Panama")
+
+# filter both wind direction and speed to date range our the tracking data
+winddir.f <- winddir %>% 
+  filter(date(timestamp)>"2022-03-06" & date(timestamp)<="2022-03-21")
+unique(date(winddir.f$timestamp))
+
+windsp.f <- windsp %>% 
+  filter(date(timestamp)>"2022-03-06" & date(timestamp)<="2022-03-21")
+unique(date(windsp.f$timestamp))
+
+windsp.f$speed.ms <- windsp.f$wsmn * 1000/3600 #kmh to ms
+
+# join both dataframes
+wind.phas <- cbind(winddir.f[,c(3,7)], windsp.f[,c(3,8)])
+
+###### 3.  Calculate U & V components of wind ######
+
+# U & V components of wind
+library(circular)
+names(wind.phas) <- c("windDir", "timestamp",  "windSpeed.kmh", 'windSpeed.ms')
+wind.phas$U.Component <-  -wind.phas$windSpeed.ms*sin(rad(wind.phas$windDir)) 
+wind.phas$V.Component <-  -wind.phas$windSpeed.ms*cos(rad(wind.phas$windDir))
+
+# Bocas wind data were binned into 15 minute intervals but the GPS data are in 2 to 3 minutes. Interpolate to get weighted weather values.
+dep_ret_march <- read_csv("~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_returns_march.csv")
+
+dep_ret_march$departure_start <- as.POSIXct(dep_ret_march$departure_start, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+dep_ret_march$departure_startUTC <- dep_ret_march$departure_start
+#convert to local time
+attr(dep_ret_march$departure_start, "tzone") <- "America/Bogota"
+
+dep_ret_march$departure_stop <- as.POSIXct(dep_ret_march$departure_stop, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+dep_ret_march$departure_stopUTC <- dep_ret_march$departure_stop 
+#convert to local time
+attr(dep_ret_march$departure_stop , "tzone") <- "America/Bogota"
+
+library(data.table)
+setDT(wind.phas)
+setDT(dep_ret_march)
+
+
+# Create an empty list to store wind data filtered by each bat's time range
+filtered_wind_data <- list()
+
+# Loop through each row in `deps_sunset_march`
+for (i in 1:nrow(dep_ret_march)) {
+  # Extract the bat's ID, departure, and return time
+  bat_id <- dep_ret_march$Tag[i]
+  departure_start <- dep_ret_march$departure_start[i]
+  departure_stop <- dep_ret_march$departure_stop[i]
+  
+  # Filter `wind.phas` for timestamps within the departure and return range
+  wind_filtered <- wind.phas[timestamp >= departure_start & timestamp <= departure_stop]
+  
+  # Store the result with bat ID in the list
+  filtered_wind_data[[as.character(bat_id)]] <- wind_filtered
+}
+
+# If desired, combine the filtered data into one data.table and add a bat_id column
+wind_data_march <- rbindlist(lapply(names(filtered_wind_data), function(id) {
+  data <- filtered_wind_data[[id]]
+  data[, bat_id := id]
+  return(data)
+}))
+```
+
+### Extract wind speed for departures in march all caves
+
+```{r}
+wind_data_march$timeSinceSunset <- deps_sunset_all$timeSinceSunset[match(wind_data_march$bat_id,deps_sunset_all$ID)]
+
+#convert timestamp again to UTC
+wind_data_march$timestampUTC <- as.POSIXct(wind_data_march$timestamp, format = "%Y-%m-%d %H:%M:%S", tz = "EST")
+
+attr(wind_data_march$timestampUTC, "tzone") <- "UTC"
+
+wind_data_march$date <- date(wind_data_march$timestampUTC)
+
+meanwind_march <- wind_data_march %>%
+  group_by(bat_id,date) %>%
+  dplyr::summarise(meanwind=mean(windSpeed.ms), varwind=var(windSpeed.ms),timeSinceSunset=mean(timeSinceSunset))#%>%
+
+meanws_march <- ggplot(aes(y=timeSinceSunset, x=meanwind), data=meanwind_march)+
+  geom_point(aes(color=as.factor(date)))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Mean wind speed")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+```
+
+### Calculate wind parameters for the march data only males in aj cave
+```{r}
+# allpaths_march <- allpaths%>%
+#   filter(year_cave=="2022_ajcave")
+# 
+# allpaths_march$timestamp <-  as.POSIXct(allpaths_march$timestamp, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+# allpaths_march$timestampUTC <- allpaths_march$timestamp 
+# #convert to local time
+# attr(allpaths_march$timestamp, "tzone") <- "America/Bogota"
+# 
+# t <- unique(allpaths_march$timestamp)
+# t.fl <- data.frame(floor_date(t, unit = "15 mins"))
+# names(t.fl) <- c("timestamp")
+# pre <- left_join(t.fl, wind.phas)
+# t.ce <- data.frame(ceiling_date(t, unit = "15 mins"))
+# names(t.ce) <- c("timestamp")
+# post <- left_join(t.ce, wind.phas)
+# 
+# Udif <- post$U.Component - pre$U.Component
+# Vdif <- post$V.Component - pre$V.Component
+# dtif <- as.numeric(t - pre$timestamp)
+# wt <- dtif / 3600
+# U.Component <- pre$U.Component + Udif * wt
+# V.Component <- pre$V.Component + Vdif * wt
+# timestamp <- t
+# winddat_march <- data.frame(timestamp, U.Component, V.Component)
+# 
+# # add in the wind components to the gps data
+# march_paths <- allpaths_march %>% left_join(winddat_march)
+# # order data set
+# march_paths <- march_paths[order(march_paths$tag_local_identifier, march_paths$timestamp),]
+
+```
+### Calculate heading for march data using movebank
+```{r}
+# move_path_march <- move(data=march_paths,
+#                   x=march_paths$location_long, 
+#                   y=march_paths$location_lat, 
+#                   time=as.POSIXct(march_paths$timestampUTC, format="%Y-%m-%d %H:%M:%S", tz="UTC"), 
+#                   animal = march_paths$tag_local_identifier,
+#                   sensor = march_paths$sensor_type,
+#                   proj = CRS("+proj=longlat +ellps=WGS84"))
+# 
+# #create a movestack
+# phas.march <- moveStack(move_path_march, forceTz="UTC")
+# 
+# phas.march$heading <- unlist(lapply(lapply(split(phas.march), angle), "c", NA))
+# # phas.ann$ground_speed <- unlist(lapply(lapply(split(phas.ann), speed), "c", NA))
+# phas.march$stepLength <- unlist(lapply(distance(phas.march), c, NA))
+# 
+# march_paths <- as.data.frame(phas.march) 
+```
+
+# Calculate wind parameters for march data
+```{r}
+# # list by ID of inbound commute
+# march_paths_ls <- split(march_paths, march_paths$ID)
+# 
+# # add wind parameters to the inbound commutes
+# windall_march <- lapply(march_paths_ls, function(x){
+#   df <- data.frame(x) 
+#   x$ws <- wind_support(df$U.Component, df$V.Component, df$heading)
+#   x$cw <- cross_wind(df$U.Component, df$U.Component, df$heading)
+#   x$airspeed <- airspeed(x$ground_speed, x$ws, x$cw) 
+#   return(x)
+# })
+# 
+# windall_march <- do.call(rbind,windall_march)
+
+windall_march <- windall_df%>%
+  filter(date(timestamp)>"2022-03-07", date(timestamp)<"2022-03-21")
+
+windall_march$cw_abs <- abs(windall_march$cw)
+
+# calculate mean and variance of wind speed, cw, ws and wd for both outbound and inbound commutes
+meanwind_mar <- windall_march %>%
+  group_by(direc,ID) %>%
+  dplyr::summarise(meanwind=mean(wind.speed), varwind=var(wind.speed), meanws=mean(ws), varws=var(ws), meancw=mean(cw),varcw=var(cw), meanwd=wind_dire, varwd=var.circular(wind_dire, na.rm=TRUE))
+
+deps_sunset_all
+windall_march
+
+# filter data remove date less than two data points
+dep_sunset_march <- deps_sunset_all%>% 
+  filter(date>"2022-03-07", date<"2022-03-21")
+
+meanwind_march_out <- meanwind_mar[meanwind_mar$direc=="outbound",]
+meanwind_march_in <- meanwind_mar[meanwind_mar$direc=="inbound",]
+
+# match departure difference after sunset to the wind parameters
+dep_sunset_march$meanwind <-  meanwind_march_out$meanwind[match(dep_sunset_march$ID,meanwind_march_out$ID)]
+#meanwind_march_out$windstart <-  meanwind_march_out$windstart[match(meanwind_march_out$ID,meanwind_march_out$ID)]
+dep_sunset_march$varwind <-  meanwind_march_out$varwind[match(dep_sunset_march$ID,meanwind_march_out$ID)]
+dep_sunset_march$meanws <- meanwind_march_out$meanws[match(dep_sunset_march$ID,meanwind_march_out$ID)]
+dep_sunset_march$varws <- meanwind_march_out$varws[match(dep_sunset_march$ID,meanwind_march_out$ID)]
+dep_sunset_march$meancw <- meanwind_march_out$meancw[match(dep_sunset_march$ID,meanwind_march_out$ID)]
+dep_sunset_march$varcw <- meanwind_march_out$varcw[match(dep_sunset_march$ID,meanwind_march_out$ID)]
+dep_sunset_march$meanwd <- meanwind_march_out$meanwd[match(dep_sunset_march$ID,meanwind_march_out$ID)]
+dep_sunset_march$varwd <- meanwind_march_out$varwd[match(dep_sunset_march$ID,meanwind_march_out$ID)]
+
+
+dep_meanwind_march <- ggplot(aes(x=meanwind, y=timeSinceSunset), data=dep_sunset_march)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Mean wind speed")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_varwind_march <- ggplot(aes(x=varwind, y=timeSinceSunset), data=dep_sunset_march)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Variance wind speed")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+  
+```
+
+### Plot wind speed mean and variance against departures in February 2022
+
+```{r}
+library(patchwork)
+dep_meanwind <- ggplot(aes(x=meanwind, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Mean wind speed")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_varwind <- ggplot(aes(x=varwind, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Variance wind speed")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+  
+dep_windstart <-ggplot(aes(x=windstart, y=timeSinceSunset), data=dep_sunset)+
+    geom_point(aes(colour = date))+
+    ylab("Departure time after sunset (min)")+
+    xlab("Wind speed at departure")+
+    theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_meanwind + dep_windstart + dep_varwind+ plot_layout(guides = "collect", axes = "collect_y")
+
+
+```
+
+### Plot wind support mean and variance against departures
+
+Wind support (ws) was calculated as the length of the wind vector in the direction of the birds' flight where positive values represent tail wind and negative values head wind.
+
+```{r}
+dep_meanws <-ggplot(aes(x=meanws, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Mean wind support")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_varws <-ggplot(aes(x=varws, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Variance wind support")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_ws_start <-ggplot(aes(x=ws_dep, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Wind support at departure")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+
+dep_meanws + dep_ws_start+dep_varws + plot_layout(guides = "collect", axes = "collect_y")
+```
+
+### Plot cross wind mean and variance against departures
+Cross wind (cw) represented the speed of the wind vector perpendicular to the travel direction irrespective of which side it came from
+
+```{r}
+dep_meancw <-ggplot(aes(x=meancw, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Mean cross wind")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_varcw <-ggplot(aes(x=varcw, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Variance cross wind")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_cw_start <-ggplot(aes(x=cw_dep, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Cross wind at departure")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_meancw + dep_cw_start+ dep_varcw + plot_layout(guides = "collect", axes = "collect_y")
+
+```
+
+### Plot wind direction mean and variance against departures
+
+```{r}
+dep_meanwd <-ggplot(aes(x=(meanwd), y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Mean wind direction")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_varwd <-ggplot(aes(x=varwd, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Variance wind direction")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_wd_dep <-ggplot(aes(x=wd_dep, y=timeSinceSunset), data=dep_sunset)+
+  geom_point(aes(colour = date))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Wind direction at departure")+
+  theme_classic()+
+  geom_smooth(method = "lm")
+
+dep_meanwd + dep_wd_dep + dep_varwd + plot_layout(guides = "collect", axes = "collect_y")
+
+rose_diagram <- ggplot(data = data.frame(dep_sunset), aes(x = wd_dep)) +
+  geom_histogram(aes(y = ..count..), bins = 36, fill = "blue", color = "black", alpha = 0.7) +
+  coord_polar(start = -pi/2) +  # Start at the top (North)
+  scale_x_continuous(limits = c(0, 360), breaks = seq(0, 360, by = 45)) +
+  labs(title = "Wind Direction Distribution", x = "Direction (degrees)", y = "Frequency") +
+  theme_minimal()
+
+```
+
+### Test departures in relation with wind variables
+
+```{r}
+library(lme4)
+dep_sunset$day_year <- yday(dep_sunset$date)
+
+hist(log(dep_sunset$timeSinceSunset))
+
+dep_sunset$timesun_log <- log(dep_sunset$timeSinceSunset)
+
+# Compute the correlation matrix for the predictor 
+# This shows pairwise correlations, which can highlight collinearity, especially if there are strong correlations (above 0.7 or below -0.7).
+
+############ model with variables at departures times ################
+cor_matrix <- cor(dep_sunset[, c("ilu", "windstart", "ws_dep", "cw_dep","day_year")], use = "complete.obs")
+print(cor_matrix)
+
+model_all_start <- lmer(timesun_log ~ ilu + windstart + ws_dep + cw_dep + (1|tag_local_identifier)+(1|day_year), data = dep_sunset)
+
+summary(model_all_start)
+car::Anova(model_all_start)
+
+
+### GLM model for departure and mean values of light wind variables (WIND SUPPORT)
+m_ws_cw_start <- lmer(timesun_log~ilu+ws_dep+cw_dep+ (1|tag_local_identifier)+(1|day_year), data=dep_sunset)
+
+summary(m_ws_cw_start)
+car::Anova(m_ws_cw_start)
+
+# simulation_ws <- simulateResiduals(fittedModel = m_ws_cw_start, plot = F)
+# 
+# plot(simulation_ws)
+
+### GLM model for departure and illumination and mean wind variable (WIND SPEED)
+m_wspeed_start <- lmer(timesun_log~ilu+windstart+cw_dep +(1|tag_local_identifier)+(1|day_year), data=dep_sunset)
+
+# m_dep_wspeed_1 <- lmer(timesun_log~ilu+meanwind+meancw + meanwd(1|tag_local_identifier)+(1|day_year), data=dep_sunset)
+
+summary(m_wspeed_start)
+car::Anova(m_wspeed_start)
+
+
+AIC(model_all_start, m_ws_cw_start,m_wspeed_start)
+anova(model_all_start, m_ws_cw_start,m_wspeed_start) #wind speed model is better
+
+
+############ For February means wind variables #############
+cor_matrix <- cor(dep_sunset[, c("ilu", "meanwind", "meanws", "meancw","day_year")], use = "complete.obs")
+print(cor_matrix)
+
+model_lm <- lm(timesun_log ~ ilu + meanwind + meanws + meancw, data = dep_sunset)
+
+# Then calculate VIF for correlations
+library(car)
+vif(model_lm)
+
+model_1 <- lmer(timesun_log ~ ilu + meanwind + meanws + meancw + (1|tag_local_identifier)+(1|day_year), data = dep_sunset)
+
+summary(model_1)
+car::Anova(model_1)
+
+
+### GLM model for departure and mean values of light wind variables (WIND SUPPORT)
+m_dep_ws <- lmer(timesun_log~ilu+meanws+meancw+ (1|tag_local_identifier)+(1|day_year), data=dep_sunset)
+
+summary(m_dep_ws)
+car::Anova(m_dep_ws)
+
+# simulation_ws <- simulateResiduals(fittedModel = m_dep_ws, plot = F)
+# 
+# plot(simulation_ws)
+
+### GLM model for departure and illumination and mean wind variable (WIND SPEED)
+m_dep_wspeed <- lmer(timesun_log~ilu+meanwind+meancw +(1|tag_local_identifier)+(1|day_year), data=dep_sunset)
+
+# m_dep_wspeed_1 <- lmer(timesun_log~ilu+meanwind+meancw + meanwd(1|tag_local_identifier)+(1|day_year), data=dep_sunset)
+
+summary(m_dep_wspeed)
+car::Anova(m_dep_wspeed)
+library(MuMIn)
+r2 <- r.squaredGLMM(m_dep_wspeed)
+print(r2)
+
+# simulation_wspeed <- simulateResiduals(fittedModel = m_dep_wspeed, plot = F)
+# 
+# plot(simulation_wspeed)
+
+AIC(m_dep_ws, m_dep_wspeed,model_lm)
+anova(m_dep_ws, m_dep_wspeed, model_lm) #wind speed model is better
+
+#comparing two models
+AIC(m_wspeed_start,m_dep_wspeed)
+```
+
+
+
+###Using a GLMM Additive model
+```{r}
+
+# dep_sunset$tag_local_identifier_f <- as.factor(dep_sunset$tag_local_identifier)
+# 
+# gam_1 <- gam(timesun_log~meanws+meancw + s(ilu) + s(day_year, bs = "re") + s(tag_local_identifier_f, bs = "re"), data=dep_sunset)
+# summary(gam_1)
+# 
+# plot(gam_1)
+# plot(gam_1, select = 1, shade = TRUE)
+# 
+# #second gam model wind mean wind speed
+# gam_2 <- gam(timesun_log~meanwind+meancw + s(ilu)+s(tag_local_identifier_f, bs = "re"), data=dep_sunset)
+# summary(gam_2)
+# 
+# plot(gam_2)
+# plot(gam_2, select = 1, shade = TRUE)
+# 
+# # Extract residuals
+# residuals_gam <- residuals(gam_2)
+# # Plot ACF of residuals
+# acf(residuals_gam, main = "ACF of Model Residuals")
+# 
+# gam_2_cor <- gam(timesun_log~meanwind+meancw + s(ilu)+ s(day_year, bs = "re")+s(tag_local_identifier_f, bs = "re"), data=dep_sunset)
+# summary(gam_2_cor)
+# 
+# plot(gam_2_cor)
+# plot(gam_2_cor, select = 1, shade = TRUE)
+# 
+# # Check concurvity of the model
+# concurvity_values <- concurvity(gam_2_cor, full = TRUE)
+# print(concurvity_values)
+# #Concurvity is similar to multicollinearity but applies to smooth terms in GAMs.
+# #High concurvity values (close to 1) indicate strong dependency between predictors, suggesting multicollinearity issues.
+# 
+# # Plot ACF of residuals
+# acf(residuals(gam_2_cor), main = "ACF of Model Residuals")
+# 
+# anova(gam_2,gam_2_cor, test = "Chisq")
+# 
+# 
+# #Thrid gam model
+# gam_3 <- gam(timesun_log ~ meanwind+ meanws + meancw + s(ilu)+ s(day_year, bs = "re")+ s(tag_local_identifier_f, bs = "re"), data = dep_sunset)
+# 
+# anova(gam_1, gam_2_cor,gam_3, test = "Chisq")
+
+```
+
+### Plot results of the model
+```{r}
+# library(gratia)
+# 
+# # Extract the smooth effect for 'ilu'
+# smooth_data <- smooth_estimates(gam_2_cor, select = "s(ilu)")
+# 
+# # Create the ggplot
+# ggplot(smooth_data, aes(x = ilu, y = .estimate)) +
+#   geom_ribbon(aes(ymin = .estimate - .se, ymax = .estimate + .se), fill = "lightblue", alpha = 0.3) +
+#   geom_line(color = "blue", size = 1) +
+#   labs(
+#     title = "Smooth Effect of 'ilu' on 'timesun_log'",
+#     x = "ilu",
+#     y = "Estimated Effect"
+#   ) +
+#   theme_classic()
+# 
+# ## other option
+# ilu_seq <- seq(min(dep_sunset$ilu), max(dep_sunset$ilu), length.out = 200)
+# 
+# 
+# # Calculate the mean values of the other predictors
+# mean_meanwind <- mean(dep_sunset$meanwind, na.rm = TRUE)
+# mean_meancw <- mean(dep_sunset$meancw, na.rm = TRUE)
+# 
+# # Create a new data frame for predictions
+# pred_data <- data.frame(
+#   ilu = ilu_seq,
+#   meanwind = mean_meanwind,
+#   meancw = mean_meancw
+# )
+# 
+# # Generate predictions with standard errors
+# predictions <- predict(gam_2, newdata = pred_data, type = "response", se.fit = TRUE)
+# 
+# # Add the predictions and standard errors to the data frame
+# pred_data$fit <- predictions$fit
+# pred_data$se <- predictions$se.fit
+# 
+# # Plot the smooth effect with ggplot
+# ggplot(pred_data, aes(x = ilu, y = fit)) +
+#   geom_ribbon(aes(ymin = fit - 1.96 * se, ymax = fit + 1.96 * se), fill = "lightblue", alpha = 0.3) +
+#   geom_line(color = "blue", size = 1) +
+#   labs(
+#     title = "Smooth Effect of 'ilu' on 'timesun_log'",
+#     x = "ilu",
+#     y = "Fitted Values"
+#   ) +
+#   theme_minimal()
+```
+
+### Testing mean wind and departures 
+
+```{r}
+# Load dataframe with both departures of February and March
+deps <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_febmarch_illumination.csv")
+# Create Id columns
+deps$ID <- paste(deps$tag_local_identifier, deps$date, sep = "_")
+deps$day_year <- yday(deps$date)
+
+# Merge 'deps' with 'meanwind_march' based on 'ID' and 'bat_id'
+deps <- merge(deps, meanwind_march[, c("bat_id", "meanwind", "varwind")], 
+              by.x = "ID", by.y = "bat_id", all.x = TRUE)
+
+# Rename the merged columns
+names(deps)[names(deps) == "meanwind"] <- "meanwspeed_march"
+names(deps)[names(deps) == "varwind"] <- "varwspeed_march"
+
+# Merge 'deps' with 'dep_sunset' based on 'ID'
+deps <- merge(deps, dep_sunset[, c("ID", "meanwind", "varwind")], 
+              by = "ID", all.x = TRUE)
+
+# Rename the merged columns
+names(deps)[names(deps) == "meanwind"] <- "meanwspeed_sunset"
+names(deps)[names(deps) == "varwind"] <- "varwspeed_sunset"
+
+# Combine the columns into a single 'meanwspeed' and 'varwspeed'
+deps$meanwspeed <- ifelse(!is.na(deps$meanwspeed_march), deps$meanwspeed_march, deps$meanwspeed_sunset)
+deps$varwspeed <- ifelse(!is.na(deps$varwspeed_march), deps$varwspeed_march, deps$varwspeed_sunset)
+
+
+### testing for both march and feb with GAMM
+
+deps$timesun_log <- log(deps$timeSinceSunset)
+
+deps_clean <-deps[!is.na(deps$meanwspeed),]
+deps_clean$day_year_f <- as.factor(deps_clean$day_year)
+deps_clean$tag_local_identifier_f <- as.factor(deps_clean$tag_local_identifier)
+deps_clean$date_f <- as.factor(deps_clean$date)
+
+#look at how many ids per period
+table(deps_clean$tag_local_identifier, deps_clean$year_cave)
+library(mgcv)
+
+#gam without day
+model_all_gam<- gam(timesun_log ~ meanwspeed+s(illumination)+ s(tag_local_identifier_f, bs = "re"), data = deps_clean)
+
+summary(model_all_gam)
+plot(model_all_gam, select=1, shade=TRUE)
+
+#gam with date
+model_1 <- gam(timesun_log ~ meanwspeed +s(illumination)+ s(day_year,bs = "re") + s(tag_local_identifier_f, bs = "re"), data = deps_clean)
+
+summary(model_1)
+plot(model_1, select=1, shade=TRUE)
+plot(model_1, select=2, shade=TRUE)
+# Plot residuals
+plot(residuals(model_1), main = "Residuals of Model 1")
+
+# Check ACF of residuals
+acf(residuals(model_1), main = "ACF of Residuals for Model 1")
+
+# Check concurvity of the model
+concurvity_values <- concurvity(model_1, full = TRUE)
+print(concurvity_values)
+
+anova(model_1, model_all_gam, test = "Chisq")
+AIC(model_1, model_all_gam)
+```
+
+### Model with means
+
+```{r}
+#model that I used
+model_lm1 <- lmer(timesun_log ~ meanwspeed + illumination + (1|tag_local_identifier_f)+(1|day_year), data = deps_clean)
+summary(model_lm1)
+car::Anova(model_lm1)
+r2 <- r.squaredGLMM(model_lm1)
+print(r2)
+plot(residuals(model_lm1))
+
+model_lm2 <- lmer(timesun_log ~ meanwspeed  + illumination + (1|tag_local_identifier_f), data = deps_clean)
+summary(model_lm2)
+car::Anova(model_lm2)
+plot(residuals(model_lm2))
+
+model_lm3 <- lmer(timesun_log ~ varwspeed + illumination + (1|tag_local_identifier_f)+(1|day_year), data = deps_clean)
+summary(model_lm3)
+car::Anova(model_lm3)
+plot(residuals(model_lm3))
+
+model_lm4 <- lmer(timesun_log ~ meanwspeed+varwspeed+illumination + (1|tag_local_identifier_f)+(1|day_year), data = deps_clean)
+summary(model_lm4)
+car::Anova(model_lm4)
+plot(residuals(model_lm4))
+
+AIC(model_lm1, model_lm2,model_lm3, model_lm4)
+```
+
+### Plot model
+
+```{r}
+# Exploratory plot of mean wind speed
+ggplot(aes(y=timeSinceSunset, x= meanwspeed), data=deps)+
+  geom_point(aes(color=year_cave))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Mean wind speed")+
+  geom_smooth(method = "lm")+
+  theme_classic()
+
+# Exploratory plot of mean Ilumination
+ggplot(aes(y=timeSinceSunset,x= illumination), data=deps)+
+  geom_point(aes(color=year_cave))+
+  ylab("Departure time after sunset (min)")+
+  xlab("Moonlight intensity")+
+  geom_smooth(method = "lm")+
+  theme_classic()
+
+# Step 1: Create a sequence of predictor values for meanwspeed and illumination
+meanws_seq <- seq(min(deps_clean$meanwspeed, na.rm = TRUE), max(deps_clean$meanwspeed, na.rm = TRUE), length.out = 100)
+illumination_seq <- seq(min(deps_clean$illumination, na.rm = TRUE), max(deps_clean$illumination, na.rm = TRUE), length.out = 100)
+
+# Step 2: Create data frames for predictions
+pred_data_meanws <- data.frame(
+  meanwspeed = meanws_seq,
+  illumination = mean(deps_clean$illumination, na.rm = TRUE),
+  tag_local_identifier_f = factor(levels(deps_clean$tag_local_identifier_f)[1], levels = levels(deps_clean$tag_local_identifier_f)),
+  day_year = mean(deps_clean$day_year, na.rm = TRUE)
+)
+
+pred_data_illumination <- data.frame(
+  meanwspeed = mean(deps_clean$meanwspeed, na.rm = TRUE),
+  illumination = illumination_seq,
+  tag_local_identifier_f = factor(levels(deps_clean$tag_local_identifier_f)[1], levels = levels(deps_clean$tag_local_identifier_f)),
+  day_year = mean(deps_clean$day_year, na.rm = TRUE)
+)
+
+# Step 3: Predict values from the model
+pred_data_meanws$predicted <- predict(model_lm1, newdata = pred_data_meanws, re.form = NA)
+pred_data_illumination$predicted <- predict(model_lm1, newdata = pred_data_illumination, re.form = NA)
+pred_data_illumination$predicted
+
+# Custom rescale function
+custom_rescale <- function(x, from, to) {
+  (x - from[1]) / (from[2] - from[1]) * (to[2] - to[1]) + to[1]
+}
+
+# Updated train_sec function using custom_rescale
+train_sec_1 <- function(primary, secondary, na.rm = TRUE) {
+  from <- range(secondary, na.rm = na.rm)
+  to <- range(primary, na.rm = na.rm)
+  
+  # Forward transform for the data
+  forward <- function(x) {
+    custom_rescale(x, from = from, to = to)
+  }
+  
+  # Reverse transform for the secondary axis
+  reverse <- function(x) {
+    custom_rescale(x, from = to, to = from)
+  }
+  
+  list(fwd = forward, rev = reverse)
+}
+
+# Create the transformation between wind speed and illumination
+illum_wind_transform <- train_sec_1(primary = deps_clean$meanwspeed, secondary = deps_clean$illumination)
+
+# Apply the forward transformation to illumination for plotting
+pred_data_illumination$illum_rescaled <- illum_wind_transform$fwd(pred_data_illumination$illumination)
+deps_clean$illum_rescaled <- illum_wind_transform$fwd(deps_clean$illumination)
+
+ggplot() +
+  # Plot illumination (rescaled) on the left y-axis
+  geom_line(data = pred_data_illumination, aes(x = predicted, y = illum_rescaled), color = "darkgreen", size = 1) +
+  geom_point(data = deps_clean, aes(x = timesun_log, y = illum_rescaled), color = "darkgreen", alpha = 0.4) +
+  
+  # Plot mean wind speed on the right y-axis
+  geom_line(data = pred_data_meanws, aes(x = predicted, y = meanwspeed), color = "blue", size = 1) +
+  geom_point(data = deps_clean, aes(x = timesun_log, y = meanwspeed), color = "blue", alpha = 0.4) +
+  
+  # Dual y-axes with separate scales
+  scale_y_continuous(
+    name = "Illumination (Green, Rescaled)",
+    sec.axis = sec_axis(trans = illum_wind_transform$rev, name = "Mean Wind Speed (Blue)")
+  ) +
+  
+  # X-axis and plot labels
+  labs(
+    x = "Predicted Log Time of Departure",
+    title = "Effects of Illumination and Mean Wind Speed on Log Time of Departure",
+    caption = "Left Y-axis: Illumination (green, rescaled)\nRight Y-axis: Mean Wind Speed (blue)"
+  ) +
+  
+  # Custom theme
+  theme_minimal() +
+  theme(
+    axis.title.y.left = element_text(color = "darkgreen"),
+    axis.title.y.right = element_text(color = "blue")
+  )
+
+
+```
+
+### Plot model with predicted values
+
+```{r}
+# Create sequences for mean wind speed and illumination for predictions
+# meanws_seq <- seq(min(deps_clean$meanwspeed, na.rm = TRUE),
+#                   max(deps_clean$meanwspeed, na.rm = TRUE), length.out = 100)
+# illum_seq <- seq(min(deps_clean$illumination, na.rm = TRUE),
+#                  max(deps_clean$illumination, na.rm = TRUE), length.out = 100)
+# 
+# # Generate new data for predictions
+# pred_data_meanws <- data.frame(meanwspeed = meanws_seq,
+#                                illumination = median(deps_clean$illumination),
+#                                tag_local_identifier_f = NA,
+#                                day_year = NA)
+# 
+# pred_data_illumination <- data.frame(meanwspeed = median(deps_clean$meanwspeed),
+#                                      illumination = illum_seq,
+#                                      tag_local_identifier_f = NA,
+#                                      day_year = NA)
+# 
+# # Predictions for mean wind speed
+# pred_meanws <- predict(model_lm1, newdata = pred_data_meanws, re.form = NA, se.fit = TRUE)
+# pred_data_meanws$fit <- pred_meanws$fit
+# pred_data_meanws$se <- pred_meanws$se.fit
+# 
+# # Predictions for illumination
+# pred_illum <- predict(model_lm1, newdata = pred_data_illumination, re.form = NA, se.fit = TRUE)
+# pred_data_illumination$fit <- pred_illum$fit
+# pred_data_illumination$se <- pred_illum$se.fit
+# 
+# # Function to rescale illumination for the secondary y-axis
+# illum_wind_transform <- train_sec_1(pred_data_meanws$fit, pred_data_illumination$fit)
+# 
+# # Calculate confidence intervals
+# pred_data_meanws$lower <- pred_data_meanws$fit - 1.96 * pred_data_meanws$se
+# pred_data_meanws$upper <- pred_data_meanws$fit + 1.96 * pred_data_meanws$se
+# 
+# pred_data_illumination$lower <- pred_data_illumination$fit - 1.96 * pred_data_illumination$se
+# pred_data_illumination$upper <- pred_data_illumination$fit + 1.96 * pred_data_illumination$se
+
+# Custom rescale function
+custom_rescale <- function(x, from, to) {
+  (x - from[1]) / (from[2] - from[1]) * (to[2] - to[1]) + to[1]
+}
+
+# Updated train_sec function using custom_rescale
+train_sec_1 <- function(primary, secondary, na.rm = TRUE) {
+  from <- range(secondary, na.rm = na.rm)
+  to <- range(primary, na.rm = na.rm)
+  
+  # Forward transform for the data
+  forward <- function(x) {
+    custom_rescale(x, from = from, to = to)
+  }
+  
+  # Reverse transform for the secondary axis
+  reverse <- function(x) {
+    custom_rescale(x, from = to, to = from)
+  }
+  
+  list(fwd = forward, rev = reverse)
+}
+
+# Create the transformation between wind speed and illumination
+illum_wind_transform <- train_sec_1(primary = deps_clean$meanwspeed, secondary = deps_clean$illumination)
+
+# Create sequences for predictors
+meanws_seq <- seq(
+  min(deps_clean$meanwspeed, na.rm = TRUE),
+  max(deps_clean$meanwspeed, na.rm = TRUE),
+  length.out = 100
+)
+
+illumination_seq <- seq(
+  min(deps_clean$illumination, na.rm = TRUE),
+  max(deps_clean$illumination, na.rm = TRUE),
+  length.out = 100
+)
+
+pred_data_meanws <- data.frame(
+  meanwspeed = meanws_seq,  # Varying mean wind speed
+  illumination = mean(deps_clean$illumination, na.rm = TRUE),  # Fixed at mean
+  tag_local_identifier_f = factor(
+    levels(deps_clean$tag_local_identifier_f)[1], 
+    levels = levels(deps_clean$tag_local_identifier_f)
+  ),
+  day_year = mean(deps_clean$day_year, na.rm = TRUE)  # Fixed value
+)
+
+pred_data_illumination <- data.frame(
+  meanwspeed = mean(deps_clean$meanwspeed, na.rm = TRUE),  # Fixed at mean
+  illumination = illumination_seq,  # Varying illumination
+  tag_local_identifier_f = factor(
+    levels(deps_clean$tag_local_identifier_f)[1], 
+    levels = levels(deps_clean$tag_local_identifier_f)
+  ),
+  day_year = mean(deps_clean$day_year, na.rm = TRUE)  # Fixed value
+)
+
+
+# Step 3: Predict values with standard errors
+pred_data_meanws$predicted <- predict(model_lm1, newdata = pred_data_meanws, re.form = NA)
+pred_data_meanws$se <- predict(model_lm1, newdata = pred_data_meanws, re.form = NA, se.fit = TRUE)$se.fit
+
+pred_data_illumination$predicted <- predict(model_lm1, newdata = pred_data_illumination, re.form = NA)
+pred_data_illumination$se <- predict(model_lm1, newdata = pred_data_illumination, re.form = NA, se.fit = TRUE)$se.fit
+
+# Apply the forward transformation to illumination for plotting
+pred_data_illumination$illum_rescaled <- illum_wind_transform$fwd(pred_data_illumination$illumination)
+deps_clean$illum_rescaled <- illum_wind_transform$fwd(deps_clean$illumination)
+
+# Add confidence intervals
+z <- 1.96  # For 95% CI
+pred_data_meanws$lwr <- pred_data_meanws$predicted - z * pred_data_meanws$se
+pred_data_meanws$upr <- pred_data_meanws$predicted + z * pred_data_meanws$se
+
+pred_data_illumination$lwr <- pred_data_illumination$predicted - z * pred_data_illumination$se
+pred_data_illumination$upr <- pred_data_illumination$predicted + z * pred_data_illumination$se
+
+#####
+# Define the prediction function
+pred_fun <- function(fit) {
+  predict(fit, newdata = pred_data_meanws, re.form = NA)
+}
+
+# Perform bootstrapping
+boot_results <- bootMer(model_lm1, FUN = pred_fun, nsim = 1000)
+
+# Extract confidence intervals
+pred_data_meanws$lwr <- apply(boot_results$t, 2, quantile, probs = 0.025)
+pred_data_meanws$upr <- apply(boot_results$t, 2, quantile, probs = 0.975)
+
+# Repeat for pred_data_illumination
+pred_fun_illum <- function(fit) {
+  predict(fit, newdata = pred_data_illumination, re.form = NA)
+}
+boot_results_illum <- bootMer(model_lm1, FUN = pred_fun_illum, nsim = 1000)
+
+pred_data_illumination$lwr <- apply(boot_results_illum$t, 2, quantile, probs = 0.025)
+pred_data_illumination$upr <- apply(boot_results_illum$t, 2, quantile, probs = 0.975)
+
+
+dep_ilu_ws <- ggplot() +
+  # Plot illumination (rescaled) with confidence intervals
+  geom_ribbon(
+    data = pred_data_illumination,
+    aes(x = illum_rescaled, ymin = lwr, ymax = upr),
+    fill = "darkblue",, alpha = 0.2
+  ) +
+  geom_line(data = pred_data_illumination, aes(y = predicted, x = illum_rescaled), color = "darkblue",, size = 1) +
+  geom_point(data = deps_clean, aes(y = timesun_log, x = illum_rescaled), color = "darkblue",, alpha = 0.4) +
+  
+  # Plot mean wind speed with confidence intervals
+  geom_ribbon(
+    data = pred_data_meanws,
+    aes(x = meanwspeed, ymin = lwr, ymax = upr),
+    fill = "#56B4E9", alpha = 0.2
+  ) +
+  geom_line(data = pred_data_meanws, aes(y = predicted, x = meanwspeed), color = "#56B4E9", size = 1) +
+  geom_point(data = deps_clean, aes(y = timesun_log, x = meanwspeed), color = "#56B4E9", alpha = 0.4) +
+  
+  # Dual y-axes with separate scales
+  scale_x_continuous(
+    name = "Mean wind speed (m/s)",
+    sec.axis = sec_axis(trans = illum_wind_transform$rev, name = "Moonlight intensity")
+  ) +
+   # Transform x-axis from log to minutes
+  scale_y_continuous(
+    name = "Predicted departure \n time (min)",
+    breaks = c(4, 5, 6),  # Example break points
+    labels = c("54", "148", "403")  # Labels in minutes
+  ) +
+  
+  # X-axis and plot labels
+  labs(
+    y = "Predicted departure time (min)"
+  ) +
+  
+  # Custom theme
+  theme_classic() +
+  theme(
+    axis.title.x.top = element_text(color = "darkblue", size = 20),
+    axis.title.x.bottom = element_text(color = "#56B4E9", size = 20),
+    axis.line.x.top = element_line(color="darkblue"),
+    axis.ticks.x.top =element_line(color="darkblue"),
+    axis.line.x.bottom =element_line(color="#56B4E9"),
+    axis.ticks.x.bottom =element_line(color="#56B4E9"),
+    # axis.title.x = element_text(size = 20), 
+    axis.title.y = element_text(size=20), 
+    axis.text.y = element_text(size=14),
+    axis.text.x.top = element_text(size=14, color = "darkblue"), 
+    axis.text.x.bottom = element_text(size=14,color = "#56B4E9")
+  )
+
+ggsave(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/dep_illu_windspeed.pdf")
+```
+
+
+

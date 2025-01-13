@@ -1,0 +1,116 @@
+---
+title: "Cleaning data Bocas 2022"
+output: html_document
+date: '2024-08-05'
+author: "Camila Calderon"
+---
+
+### load packages
+
+```{r setup}
+pacman::p_load(tidyverse,data.table, move, lubridate, cowplot, ggplot2, doBy, dplyr,  ggpubr, spatialrisk, rgdal, janitor, ISLR)
+```
+
+### Loading movebank data from 2021-2022
+
+```{r data from movebank}
+# download from movebank
+me <- movebankLogin(username="mariacalderon", password="Sunflower17!")
+studyId <- getMovebankID("Greater spear-nosed bat (Phyllostomus hastatus) in Bocas del Toro 2021-2022",me)
+batsmove<- getMovebankData(study=studyId, login=me)
+batsdf <- as.data.frame(batsmove)
+unique(batsdf$tag_local_identifier)
+```
+
+### Change names of the tag local identifiers
+
+```{r  editing data, results='hide'}
+# change the ST of the tag local identifier of some individuals to TS
+batsdf$tag_local_identifier <- gsub('ST', 'TS', batsdf$tag_local_identifier)
+unique(batsdf$tag_local_identifier)
+```
+
+### Adjusting timestamp column
+
+```{r remove outliers, include=TRUE}
+# changing the column name of timestamp and setting a Posixct class
+batsdf$timestamp <- as.POSIXct(batsdf$timestamp, format = "%Y-%m-%d %H:%M:%S", tz ="UTC")
+
+# check if there are outliers
+plot(batsdf$location_long, batsdf$location_lat)
+```
+
+### Removing some individuals with no good data
+
+```{r}
+batsdf <- batsdf %>%
+  filter(date(timestamp)>="2022-01-01")
+
+# splitting data frame to a list
+bocas.split <- split(batsdf, batsdf$tag_local_identifier)
+
+plot(bocas.split[["PH_TS_030"]]$location_long,bocas.split[["PH_TS_030"]]$location_lat)#remove
+
+# remove individuals where data is very incomplete 
+bocas.splitnew <- bocas.split[names(bocas.split) %in% c("PH_TS_030")== FALSE] 
+
+# create data frame
+batsbocas.clean <- do.call(rbind, bocas.splitnew)
+
+# split data frame by ID
+batsbocas.clean$ID <- paste0(batsbocas.clean$tag_local_identifier, "_", date(batsbocas.clean$timestamp))
+allbats.batday <- split(batsbocas.clean, batsbocas.clean$ID)
+
+# remove more individual days from march where data was not good 
+batsclean <- allbats.batday[names(allbats.batday) %in%  c("22507B4E_D_2022-02-01", "2C500235_D_2022-02-13", "38506D37_D_2022-02-03", "0D501435_C_2021−12−09", "2D507235_G_2022-01-31", "37507537_D_2022-02-01",  "38506D37_C_2021-12-09",  "38506737_G_2022-01-30",  "39500E37_D_2022-02-01", "39500E37_D_2022-02-02", "PH_TS_016_2022-03-13", "PH_TS_016_2022-03-15", "PH_TS_018_2022-03-17", "PH_TS_018_2022-03-18", "PH_TS_018_2022-03-19", "PH_TS_024_2022-03-08", "PH_TS_024_2022-03-11", "PH_TS_024_2022-03-12", "PH_TS_024_2022-03-13", "PH_TS_024_2022-03-14", "PH_TS_024_2022-03-15", "PH_TS_039_2022-03-15", "PH_TS_049_2022-03-11", "PH_TS_049_2022-03-12", "PH_TS_049_2022-03-13", "PH_TS_052_2022-03-13", "PH_TS_052_2022-03-14", "PH_TS_056_2022-03-10", "PH_TS_056_2022-03-12", "PH_TS_056_2022-03-15", "PH_TS_056_2022-03-16", "PH_TS_056_2022-03-17", "PH_TS_062_2022-03-15", "PH_TS_062_2022-03-16", "PH_TS_062_2022-03-17", "PH_TS_072_2022-03-14", "PH_TS_072_2022-03-15", "PH_TS_072_2022-03-17", "PH_TS_072_2022-03-18", "PH_TS_074_2022-03-13", "PH_TS_074_2022-03-14", "PH_TS_081_2022-03-14", "PH_TS_081_2022-03-15", "PH_TS_081_2022-03-17", "PH_TS_083_2022-03-12", "PH_TS_083_2022-03-14", "PH_TS_083_2022-03-15", "PH_TS_085_2022-03-09", "PH_TS_085_2022-03-10", "PH_TS_085_2022-03-13", "PH_TS_085_2022-03-15", "PH_TS_085_2022-03-16", "PH_TS_096_2022-03-13", "PH_TS_096_2022-03-14", "PH_TS_096_2022-03-15", "PH_TS_098_2022-03-10", "PH_TS_098_2022-03-11", "PH_TS_100_2022-03-12", "PH_TS_100_2022-03-13", "PH_TS_100_2022-03-14", "PH_TS_100_2022-03-15", "PH_TS_103_2022-03-16", "PH_TS_113_2022-03-11", "PH_TS_113_2022-03-13", "PH_TS_113_2022-03-14", "PH_TS_113_2022-03-15", "PH_TS_114_2022-03-08", "PH_TS_114_2022-03-10", "PH_TS_121_2022-03-12","PH_TS_121_2022-03-13", "PH_TS_121_2022-03-15")== FALSE]
+
+batsclean.df <- do.call(rbind, batsclean)
+
+```
+
+### Adding movement parameters
+
+```{r resampling data from december, results=FALSE}
+# order data frame by id and timestamp
+batsclean.df <- batsclean.df[order(batsclean.df$tag_local_identifier, batsclean.df$timestamp),]
+
+# it runs if the data is downloaded from movebank
+movebats <- move(x=batsclean.df$location_long, y=batsclean.df$location_lat, 
+	     time=as.POSIXct(batsclean.df$timestamp, format="%Y-%m-%d %H:%M:%S", tz="UTC"), 
+	     data=batsclean.df, proj=CRS("+proj=longlat +ellps=WGS84"), 
+	     animal=batsclean.df$tag_local_identifier, sensor="GPS")
+
+#"proj=utm +zone=17 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"
+n.indiv(movebats)
+
+move::plot(movebats)
+
+# initial movement parameters pre-cleaning.
+moveList <- lapply(split(movebats), function(myInd){
+  datechange <- c(0, abs(diff(as.numeric(as.factor(date(myInd@timestamps-(12*60*60)))))))
+  myInd$BatDay <- cumsum(datechange)+1
+  myInd$tlag <- c(NA,timeLag(myInd, units="secs"))
+  myInd$step <- c(NA, move::distance(myInd))
+  myInd$tag_ground_speed <- myInd$ground_speed
+  myInd$ground_speed <- c(NA, move::speed(myInd))
+  myInd$angle <- c(NA, angle(myInd))
+  return(myInd)
+})
+
+movebats <- moveStack(moveList, forceTz="UTC")
+movebats<- spTransform(movebats, CRS("+proj=utm +zone=17 +datum=WGS84"))
+crds <- as.data.frame(movebats@coords)
+movebats$x <- crds$coords.x1 
+movebats$y <- crds$coords.x2 
+batsdf_new<- as.data.frame(movebats)
+
+# create a column with id and batday
+batsdf_new$ID_batday <- paste(batsdf_new$tag_local_identifier, batsdf_new$BatDay, sep="_")
+
+# add cave only 
+batsdf_new$cave <- sapply(batsdf_new$group_id, function(x) {strsplit(x, "-")[[1]][2]})
+
+#saving data
+save(batsdf_new, file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/Bocas_2022_clean.RData")
+
+```

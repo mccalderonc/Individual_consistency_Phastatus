@@ -1,0 +1,152 @@
+---
+title: "Cleaning 2023 data"
+author: "Camila Calderon"
+date: "2024-08-05"
+output: html_document
+---
+
+### Load libraries 
+
+```{r, warning=FALSE, message = FALSE}
+pacman::p_load(move,ggmap, data.table, lubridate, cowplot, ggplot2, doBy, dplyr,ggpubr, spatialrisk, rgdal, janitor)
+```
+
+### Download data from movebank for Bocas 2023
+
+```{r}
+me <- movebankLogin(username="mariacalderon", password="Sunflower17!")
+studyId <- getMovebankID("Greater spear-nosed bat (Phyllostomus hastatus) in Bocas del Toro 2023",me)
+Bocas2023<- getMovebankData(study=studyId, login=me)
+n.indiv(Bocas2023)
+# plot tracks
+move::plot(Bocas2023)
+```
+
+### look at data to see incomplete days
+
+```{r pressure, results=FALSE}
+# convert move object to data frame for cleaning
+Bocas_2023df <- as.data.frame(Bocas2023)
+
+# add id column
+Bocas_2023df$ID <- paste(Bocas_2023df$tag_local_identifier, date(Bocas_2023df$timestamp), sep="_")
+
+# plotting individuals to see which ones have good data by ID
+lapply(split(Bocas_2023df, Bocas_2023df$ID), function(x){
+  ggplot(x, aes(x=location_lat, y=location_long))+geom_path()+ggtitle(x$ID)
+})
+```
+
+### Remove days with bad data
+
+```{r}
+# split data frame by id
+batsBocas_ls <- split(Bocas_2023df, Bocas_2023df$ID)
+
+Bocas_clean2023_ls <- batsBocas_ls[names(batsBocas_ls) %in% c("PHYL1_2023-08-18", "PHYL1_2023-08-19","PHYL4_2023-08-13","PHYL11_2023-08-14","PHYL11_2023-08-15","PHYL11_2023-08-16","PHYL16_2023-08-17","PHYL16_2023-08-18","PHYL4_2023-08-17", "PHYL40_2023-08-12", "PHYL40_2023-08-14", "PHYL40_2023-08-16","PHYL40_2023-08-17",  "PHYL39_2023-08-12", "PHYL38_2023-08-15", "PHYL38_2023-08-16", "PHYL37_2023-08-14", "PHYL37_2023-08-16", "PHYL36_2023-08-12", "PHYL36_2023-08-12", "PHYL36_2023-08-13", "PHYL36_2023-08-15", "PHYL36_2023-08-16", "PHYL36_2023-08-17", "PHYL35_2023-08-12", "PHYL35_2023-08-13", "PHYL35_2023-08-14", "PHYL34_2023-08-12", "PHYL34_2023-08-15", "PHYL34_2023-08-16", "PHYL33_2023-08-12", "PHYL33_2023-08-13", "PHYL33_2023-08-14", "PHYL33_2023-08-16", "PHYL33_2023-08-17", "PHYL32_2023-08-12", "PHYL32_2023-08-14","PHYL32_2023-08-17", "PHYL31_2023-08-15", "PHYL31_2023-08-16", "PHYL30_2023-08-12", "PHYL30_2023-08-17", "PHYL3_2023-08-15", "PHYL29_2023-08-13", "PHYL24_2023-08-14", "PHYL24_2023-08-15", "PHYL24_2023-08-16","PHYL24_2023-08-17", "PHYL24_2023-08-18", "PHYL22_2023-08-14","PHYL22_2023-08-15", "PHYL22_2023-08-16", "PHYL22_2023-08-17", "PHYL21_2023-08-15", "PHYL21_2023-08-18", "PHYL27_2023-08-14", "PHYL27_2023-08-15", "PHYL27_2023-08-16", "PHYL27_2023-08-17", "PHYL27_2023-08-18", "PHYL28_2023-08-18") == FALSE] #37 is not great but I still will leave it 
+# bats 22, 24, 32, 35, 39, 30 forage in the island at least one of the days.
+# bat 22 forage on the island on August 14 and 15
+#bat 24 forage on the island on August 14-18
+
+# plot data of the individuals to be used
+lapply(Bocas_clean2023_ls, function(x){
+    ggplot(aes(x=location_long, y=location_lat), data=x)+
+    geom_point()+
+    ggtitle(unique(x$ID))
+})
+```
+## Remove speeds higher than 15 m/s
+
+```{r, results=FALSE}
+# covert list of ids to data frame again
+Bocas_clean2023 <- do.call(rbind, Bocas_clean2023_ls)
+
+# order by ID and timestamp
+Bocas_clean2023 <- Bocas_clean2023[order(Bocas_clean2023$tag_local_identifier, Bocas_clean2023$timestamp),]
+
+# remove speed higher than 15 m/s that look like outliers
+Bocas_clean2023 <- Bocas_clean2023[Bocas_clean2023$ground_speed<=15,]
+```
+
+### Downsample data to every 2 minutes
+```{r, results=FALSE}
+# split by ID
+bats_2023_split <- split(Bocas_clean2023, Bocas_clean2023$ID)
+
+# convert to track object before down sampling
+resample <-  lapply(bats_2023_split, function(x){
+  mk_track(tbl=x, all_cols=T,
+           .x=location_long, .y=location_lat, crs = 32617,
+           .t=timestamp, order_by_ts = T, check_duplicates = T)
+})
+
+# resample every two minutes
+resample_2 <- lapply(resample, function(x){
+  track_resample(x, rate = minutes(2), tolerance = seconds(1), start = 1)
+})
+
+# check if resampling went well
+lapply(resample_2, function(x){
+  ggplot(aes(x=x_, y=y_), data=x) + geom_point()
+})
+
+# convert to data frame
+batsdf2023 <- do.call(rbind.data.frame,resample_2)
+
+# I have to do this again, otherwise is a tibble
+batsdf2023 <- as.data.frame(batsdf2023)
+names(batsdf2023)[1] <- "location_long"
+names(batsdf2023)[2] <- "location_lat"
+names(batsdf2023)[3] <- "timestamp"
+
+# remove burst columns
+batsdf2023 <- batsdf2023[,-52]
+
+#order data frame
+batsdf2023[order(batsdf2023$tag_local_identifier, batsdf2023$timestamps),]
+
+# convert to move object
+batsmove <- move(x=batsdf2023$location_long, y=batsdf2023$location_lat, 
+                 time=as.POSIXct(batsdf2023$timestamps, format="%Y-%m-%d %H:%M:%S", tz="UTC"), 
+                 data=batsdf2023, proj=CRS("+proj=longlat +ellps=WGS84"), 
+                 animal=batsdf2023$tag_local_identifier, sensor="GPS")
+
+# calculate initial movement parameters pre-cleaning
+moveList <- lapply(split(batsmove), function(myInd){
+  datechange <- c(0, abs(diff(as.numeric(as.factor(date(myInd@timestamps-(12*60*60)))))))
+  myInd$BatDay <- cumsum(datechange)+1
+  myInd$tlag <- c(NA,timeLag(myInd, units="secs"))
+  myInd$step <- c(NA, move::distance(myInd))
+  myInd$tag_ground_speed <- myInd$ground_speed
+  myInd$ground_speed <- c(NA, move::speed(myInd))
+  myInd$angle <- c(NA, angle(myInd))
+  return(myInd)
+})
+n.indiv(batsmove)
+
+movebats2023<- moveStack(moveList, forceTz="UTC")
+movebats2023<- spTransform(movebats2023, CRS("+proj=utm +zone=17 +datum=WGS84"))
+crds <- as.data.frame(movebats2023@coords)
+movebats2023$x <- crds$coords.x1 
+movebats2023$y <- crds$coords.x2 
+
+# convert to data frame
+batsdf2023_clean <- as.data.frame(movebats2023)
+
+# add id_batday column 
+batsdf2023_clean$ID_batday <- paste(batsdf2023_clean$tag_local_identifier, batsdf2023_clean$BatDay, sep="_")
+unique(batsdf2023_clean$ID_batday)
+
+# add cave only 
+batsdf2023_clean$cave <- sapply(batsdf2023_clean$group_id, function(x) {strsplit(x, "-")[[1]][1]})
+
+# rename cave
+batsdf2023_clean$cave[which(batsdf2023_clean$cave=="LG")] <- "lagruta"
+batsdf2023_clean$cave[which(batsdf2023_clean$cave=="MT")] <- "ajcave"
+
+
+# save data frame cleaned
+save(batsdf2023_clean,file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/Bocas_2023_clean.RData")
+```
+
+

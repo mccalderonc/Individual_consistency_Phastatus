@@ -1,0 +1,286 @@
+---
+title: "Activity budgets"
+author: "Camila Calderon"
+date: "2024-07-30"
+output: html_document
+---
+
+### Load packages
+
+```{r setup}
+pacman::p_load(lubridate, dplyr, ggplot2, tidyverse, plyr, Rmisc)
+```
+
+### Loading data
+
+```{r}
+load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/bocas_2022-2023HMMbehaviors.RData")
+
+# check cave column
+unique(bocas$year_cave) 
+
+bocas <- bocas %>%
+  filter(tag_local_identifier!="0C506E35_G", tag_local_identifier!="PH_TS_004", tag_local_identifier!="PH_TS_024")
+
+```
+
+### Remove ids
+
+I am removing individuals with incomplete commutes
+
+```{r, results='hide', message=FALSE}
+bocas_feb <- bocas %>%
+ filter(date>="2022-01-31", date<="2022-02-28", tag_local_identifier!="0C506E35_G")
+
+bocas_ts <- bocas %>%
+  filter(ID=="PH_TS_011_2022-03-08"|  ID=="PH_TS_011_2022-03-12"| ID== "PH_TS_014_2022-03-08"| ID=="PH_TS_014_2022-03-09"|  ID=="PH_TS_014_2022-03-10"| ID=="PH_TS_016_2022-03-09"| ID=="PH_TS_016_2022-03-10"| ID=="PH_TS_074_2022-03-10"|  ID=="PH_TS_079_2022-03-07"|  ID=="PH_TS_080_2022-03-10"| ID=="PH_TS_080_2022-03-11"| ID=="PH_TS_080_2022-03-14"| ID=="PH_TS_080_2022-03-15"|  ID=="PH_TS_080_2022-03-16"| ID=="PH_TS_080_2022-03-17"| ID=="PH_TS_080_2022-03-18"|  ID=="PH_TS_080_2022-03-19"| ID=="PH_TS_080_2022-03-09"| ID=="PH_TS_080_2022-03-21"| ID=="PH_TS_080_2022-03-10"| ID=="PH_TS_100_2022-03-07"| ID=="PH_TS_100_2022-03-10"| ID=="PH_TS_100_2022-03-11"| ID=="PH_TS_100_2022-03-16"| ID=="PH_TS_112_2022-03-08"|  ID=="PH_TS_112_2022-03-11"| ID=="PH_TS_113_2022-03-09"|  ID=="PHYL11_2023-08-17"| ID=="PHYL11_2023-08-18"| ID=="PHYL16_2023-08-14"| ID=="PHYL16_2023-08-15"| ID=="PHYL25_2023-08-14"| ID=="PHYL25_2023-08-15"| ID=="PHYL25_2023-08-16"| ID=="PHYL25_2023-08-18"| ID=="PHYL7_2023-08-16" | ID=="PHYL7_2023-08-17"|  ID=="PHYL7_2023-08-18")
+
+bocas_com <- rbind(bocas_feb,bocas_ts)
+
+
+lapply(split(bocas, bocas$tag_local_identifier), function(x){
+   ggplot(aes(x=location_long, y=location_lat, color=as.factor(date)), data=x)+
+    geom_path()+
+     ggtitle(unique(x$tag_local_identifier))
+ })
+
+ggplot(aes(x=location_long, y=location_lat), data=bocas[bocas$tag_local_identifier=="PH_TS_120",])+
+    geom_path()+
+  facet_wrap(.~date)
+
+```
+
+
+
+
+```{r}
+# for foraging points which have tlag larger than 1800 sec (30 minutes), because the bat was at the cave, and the gps did not record. We will assign a tlag of 190
+bocas_com$tlag[which(bocas_com$behav=="foraging" & bocas_com$tlag>1800)] <- 190
+bocas_com <- bocas_com %>%
+  filter(!c(behav=="commuting" & tlag>1800))
+
+```
+
+### Calculate proportion of time spent in each behavior
+
+```{r, message=FALSE}
+# summary data frame of proportions
+behav.time= aggregate(bocas_com[c("tlag")], by=bocas_com[c("ID", "year_cave","tag_local_identifier", "behav", "cave")], FUN=sum, na.rm=T)
+behav.time$time.min <- behav.time$tlag/60
+behav.time$IDday <- paste(behav.time$tag_local_identifier, behav.time$BatDay, sep="_")
+behav.time<- behav.time %>%
+  group_by(IDday) %>%
+  dplyr::mutate(totaltime=sum(time.min))#time.all$timeTrack.min[match(time.behav.group$IDday, time.all$IDday)]
+behav.time$prop.time <- round(behav.time$time.min/behav.time$totaltime,2)
+
+
+# time spent on each behavior by cave/year
+sumtimeBycave<- behav.time %>%  
+  group_by(behav,year_cave)%>%# to make summary table by behaviors
+  dplyr::summarise(mean.time=mean(time.min), sd.time=sd(time.min))
+
+sumpropBycave<- behav.time %>% 
+  group_by(behav, cave)%>%
+  dplyr::summarise(mean.prop=mean(prop.time), sd.prop=sd(prop.time))
+
+# number individuals to the summary table
+x <- as.data.frame(table(behav.time$year_cave,behav.time$tag_local_identifier))
+z <- count(x$Var1[which(x$Freq>0)])
+
+```
+
+###  Plot proportion of time spent on each behavior by cave/year
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# levels of the cave groups
+
+pos <- position_dodge(0.9)
+
+# plot Fig S2
+ggplot(aes(y=tag_local_identifier, x=time.min), data=behav.time[behav.time$behav=="foraging",])+
+  #geom_violin(position = pos) +
+  geom_boxplot(width = .2, 
+               fatten = NULL,
+               #alpha = 0.75,
+               position = pos)+
+  stat_summary(fun = "mean",  geom = "point", position = pos) +
+  stat_summary(fun.data = "mean_se", 
+               geom = "errorbar", 
+               width = .1, position = pos)+
+  #scale_x_discrete(labels=str_wrap(c("2016",  "2022"), width=10))+
+  #scale_fill_brewer(palette = "Greys")+
+  xlab("Time (mins)")+
+  ylab("Individual night")+
+  #labs(fill="behaviors")+
+  theme_classic()+
+  theme(axis.title = element_text(face = 'bold', size=20), 
+        axis.title.x = element_text(size = 24), 
+        axis.title.y=element_text(size=24), 
+        axis.text.y = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        legend.title =element_text(size=20),
+        legend.text = element_text(size=18)
+        )
+
+# save plot# save plottime.min
+ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/timeforaging_id.pdf", height=10, width=15)
+```
+### Check at the departures and foraging times
+```{r}
+deps_all<- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_febmarch_wetseason.csv")
+deps_all$ID <- paste(deps_all$tag_local_identifier, deps_all$date, sep="_")
+
+behav.time$dep_aftersun <- deps_all$timeSinceSunset[match(behav.time$ID,deps_all$ID)]
+
+behav.time.foraging <- behav.time %>%
+  filter(behav=="foraging")
+
+ggplot(aes(x=dep_aftersun, y=time.min), data=behav.time.foraging)+
+  geom_point()+
+  #scale_color_manual(values=c("#756BB1", "#21918c","#F0E442"),labels=c("dry 2022-2", "dry 2022-1", "wet 2023"))+
+  #scale_color_discrete(labels=c("dry 2022-2", "dry 2022-1", "wet 2023"))+
+  theme_classic()+
+  xlab("Departure time after sunset (min)")+
+  ylab("Foraging time (min)")+
+  labs(color = "Period"
+  )+
+  theme(axis.title = element_text(face = 'bold', size=20), 
+        axis.title.x = element_text(size = 24), 
+        axis.title.y=element_text(size=24), 
+        axis.text.y = element_text(size=20), 
+        axis.text.x = element_text(size=20),
+        legend.title =element_text(size=20),
+        legend.text = element_text(size=18)
+        )+
+  geom_smooth(method="lm", color="black")
+
+ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/foraging_deptimeSunsent.pdf", height=10, width=15)
+
+```
+
+
+### Test differences in behaviors
+
+```{r, message=FALSE, warning=FALSE}
+library(lme4)
+library(performance)
+library(emmeans)
+library(car)
+
+hist(behav.time.foraging$time.min)
+
+behav.time.foraging$time.min.log <- log(behav.time.foraging$time.min)
+  
+m_fordep <- lmer(time.min.log~dep_aftersun+year_cave+(1|tag_local_identifier), data=behav.time.foraging)
+
+summary(m_fordep)
+plot(m_fordep)
+Anova(m_fordep)
+library(MuMIn)
+r2 <- r.squaredGLMM(m_fordep)
+print(r2)
+
+# Marginal means for the interaction of sameid and season
+emm_interaction <- emmeans(m_fordep, ~ year_cave*dep_aftersun)
+
+# Pairwise comparisons for the interaction
+pairwise_interaction <- pairs(emm_interaction, adjust = "tukey")
+pairwise_interaction
+
+```
+### make plot of foraging time vs deoarture time with fitted values of the model
+```{r}
+# Create new prediction data
+new_data <- data.frame(
+  dep_aftersun = seq(min(behav.time.foraging$dep_aftersun,na.rm=TRUE), 
+                     max(behav.time.foraging$dep_aftersun, na.rm=TRUE), 
+                     length.out = 100),
+  year_cave = behav.time.foraging$year_cave[1]  # Use first level as reference
+)
+
+# Get predictions with confidence intervals
+pred <- predict(m_fordep, newdata = new_data, re.form = NA, se.fit = TRUE)
+
+# Create plotting data frame
+plot_data <- data.frame(
+  dep_aftersun = new_data$dep_aftersun,
+  fit = pred$fit,
+  lower = pred$fit - 1.96 * pred$se.fit,
+  upper = pred$fit + 1.96 * pred$se.fit
+)
+
+
+# Create the plot
+ggplot() +
+  geom_point(data = behav.time.foraging, 
+             aes(x = dep_aftersun, y = time.min.log), 
+             color = "black", alpha=0.6) +
+  geom_line(data = plot_data, 
+            aes(x = dep_aftersun, y = fit), 
+            color = "#619CFF", size=1) +
+  geom_ribbon(data = plot_data, 
+              aes(x = dep_aftersun, ymin = lower, ymax = upper), 
+              alpha = 0.2, 
+              fill = "grey") +
+  scale_y_continuous(breaks = c(4, 5, 6), labels = c("54", "148", "403"))+
+  labs(x = "Departure time after sunset (min)",
+       y = "Log foraging time (min)") +
+  guides(fill="none", color="none")+
+  theme_classic()+
+  theme(legend.position = "none", 
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 14),
+        axis.title.x = element_text(size = 18),
+        axis.title.y = element_text(size = 18), 
+        plot.title= element_text(size = 20))
+
+
+ggsave(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/FigS6.pdf")
+  
+```
+### Tess tepreatability for individuals in the dry season -1
+
+```{r}
+behav.time.forFeb <- behav.time.foraging%>%
+  filter(year_cave=="2022_lagruta_Feb")%>%
+  mutate(date=str_sub(ID, 12))
+  
+behav.time.forFeb$date <- as.factor(behav.time.forFeb$date)
+hist(behav.time.forFeb$time.min)
+
+model_check <- lmer(time.min ~ date + (1 | tag_local_identifier), data = behav.time.forFeb)
+summary(model_check)
+
+rep_foraging<- rpt(time.min~ date + (1|tag_local_identifier), grname = c("tag_local_identifier","Residual","Fixed"), 
+    data = behav.time.forFeb, datatype = "Gaussian", nboot = 1000, npermut = 0, ratio = FALSE, adjusted = FALSE)
+
+print(rep_foraging)
+1453/(2301.76+1650.684)
+
+
+plot(rep_foraging, grname = "tag_local_identifier", scale = "probit")
+
+#index of individual repeatabilitu
+# Add residuals to the original data
+# Extract residuals from the model
+model_residuals <- residuals(rep_foraging$mod)
+behav.time.forFeb$residuals <- model_residuals
+mean_res <- mean(behav.time.forFeb$residuals, na.rm=TRUE)
+
+# Calculate intraindividual variance for each individual (within-individual variance per individual)
+intraindividual_variance <- behav.time.forFeb %>%
+  group_by(tag_local_identifier) %>%
+  dplyr::summarise(S_ind =mean(residuals - mean_res,na.rm = TRUE)^2)
+
+print(intraindividual_variance)
+
+# Calculate individual-level repeatability for each individual
+intraindividual_repeatability <- intraindividual_variance %>%
+  mutate(R_ind = interindividual_variance / (interindividual_variance + S_ind))
+
+# Print the individual-level repeatability values
+print(intraindividual_repeatability)
+mean(intraindividual_repeatability$R_ind, na.rm=TRUE)
+sd(intraindividual_repeatability$R_ind, na.rm=TRUE)
+```
+

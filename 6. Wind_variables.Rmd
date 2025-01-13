@@ -1,0 +1,185 @@
+---
+title: "Extract_windvariables"
+author: "Camila Calderon"
+date: "2025-01-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+pacman::p_load(move, lubridate,ggplot2,tidyverse,mapview, circular)
+```
+
+### Load wind data anottate from Movebank and path data
+
+
+```{r laod}
+wind2022_1 <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/Greater spear-nosed bat (Phyllostomus hastatus) in Bocas del Toro 2021-2022-7728381067000325147.csv")
+
+wind2022_2 <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/Greater spear-nosed bats (Phyllostomus hastatus) in Bocas del Toro 2023-1461550101126710682.csv")
+
+### Load outbound and inbound commutes
+allpaths <- read.csv(file = "/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allout_inbound_paths.csv")
+#order data
+allpaths <- allpaths[order(allpaths$tag_local_identifier, allpaths$timestamp),]
+
+#load wind data for march
+winddir <- read.csv(file = "~/ownCloud/PhDLife/P.hastatus/2021-10-Camila-secondseason/Analysis/data/bocas_tower_wdvm_elect_2.csv")
+head(winddir)
+windsp <- read.csv(file = "~/ownCloud/PhDLife/P.hastatus/2021-10-Camila-secondseason/Analysis/data/bocas_tower_wsmn_elect_2.csv")
+head(windsp)
+
+```
+
+### Add heading and ground speed with the move package
+
+
+```{r}
+move_path <- move(data=allpaths,
+                  x=allpaths$location_long, 
+                  y=allpaths$location_lat, 
+                  time=as.POSIXct(allpaths$timestamp, format="%Y-%m-%d %H:%M:%S", tz="UTC"), 
+                  animal = allpaths$tag_local_identifier,
+                  sensor = allpaths$sensor_type,
+                  proj = CRS("+proj=longlat +ellps=WGS84"))
+
+#create a movestack
+phas.ann <- moveStack(move_path, forceTz="UTC")
+
+phas.ann$heading <- unlist(lapply(lapply(split(phas.ann), angle), "c", NA))
+# phas.ann$ground_speed <- unlist(lapply(lapply(split(phas.ann), speed), "c", NA))
+#phas.ann$stepLength <- unlist(lapply(distance(phas.ann), c, NA))
+
+allpaths <- as.data.frame(phas.ann) 
+```
+
+### Wind support functions
+
+```{r}
+# wind directions
+wind_dir <- function(u_ms, v_ms) {
+  wind_abs <- sqrt(u_ms^2 + v_ms^2)# wind speed
+
+  wind_dir_trig_to <- atan2(u_ms/wind_abs, v_ms/wind_abs)
+  wind_dir_trig_to_degrees <- wind_dir_trig_to * 180/pi
+
+  wind_dir_trig_from_degrees <- wind_dir_trig_to_degrees + 180
+
+  wind_dir_cardinal <- 90 - wind_dir_trig_from_degrees
+  wind_dir_cardinal <- (wind_dir_cardinal + 360) %% 360 # Ensure the result is between 0 and 360
+
+  return(wind_dir_cardinal)
+}
+
+# wind support
+wind_support <- function(u,v,heading) {
+  angle <- atan2(u,v) - heading/180*pi
+  return(cos(angle) * sqrt(u*u+v*v))
+}
+
+# cross wind
+cross_wind <- function(u,v,heading) {
+  angle <- atan2(u,v) - heading/180*pi
+  return(sin(angle) * sqrt(u*u+v*v))
+}
+
+# airspeed
+airspeed <- function(ground_speed, ws, cw)
+{
+  try(va <- sqrt((ground_speed - ws)^2 + (cw)^2))
+  return(va)
+}
+
+```
+
+### Join and filter wind data
+ 
+```{r}
+wind2022_1 <- wind2022_1[,c(-8,-9,-13,-14,-16,-17)]
+
+windall <- rbind(wind2022_1[,c("event.id","visible","timestamp", "location.long","location.lat","tag.local.identifier", "gps.satellite.count", "gps.hdop","height.above.msl", "ECMWF.ERA5.SL.Wind..10.m.above.Ground.U.Component.",  "ECMWF.ERA5.SL.Wind..10.m.above.Ground.V.Component.")], wind2022_2[,c("event.id","visible","timestamp", "location.long","location.lat","tag.local.identifier", "gps.satellite.count", "gps.hdop", "height.above.msl",  "ECMWF.ERA5.SL.Wind..10.m.above.Ground.U.Component.",  "ECMWF.ERA5.SL.Wind..10.m.above.Ground.V.Component.")]) 
+
+eventids <- unique(allpaths$event_id)
+
+# filter by events ids
+windall <- windall[windall$event.id %in% eventids,]
+
+# rename variable of the u and v component
+names(windall)[10] <- "u.comp"
+names(windall)[11] <- "v.comp"
+
+# add columns to the wind data based on the path data
+# direction of the commute
+windall$direc <- allpaths$direc[match(windall$event.id, allpaths$event_id)]
+# ground speed
+windall$ground.speed <- allpaths$ground_speed[match(windall$event.id, allpaths$event_id)]
+#step length
+windall$step.length <- allpaths$step[match(windall$event.id, allpaths$event_id)]
+# ID
+windall$ID <- paste(windall$tag.local.identifier, date(windall$timestamp), sep = "_")
+# order dataframe
+windall <- windall[order(windall$tag.local.identifier, windall$timestamp),]
+# add heading
+windall$heading <- allpaths$heading
+# calculate and add wind direction
+windall$wind_dire <- wind_dir(windall$u.comp, windall$v.comp) 
+windall$wind_dire <- as.circular(windall$wind_dire)
+```
+
+### Calculate wind parameters and added to the wind dataframe
+
+```{r}
+# split data frame by outbound and inbound commute
+windall_out <- windall[windall$direc=="outbound",]
+windall_in <- windall[windall$direc=="inbound",]
+
+# list by ID of outbound commute
+windall_out_ls <- split(windall_out, windall_out$ID)
+
+# add wind parameters to the outbound commutes
+windall_out <- lapply(windall_out_ls, function(x){
+  df <- data.frame(x) 
+  x$ws <- wind_support(df$u.comp, df$v.comp, df$heading)
+  x$cw <- cross_wind(df$u.comp, df$v.comp, df$heading)
+  x$airspeed <- airspeed(x$ground.speed, x$ws, x$cw) 
+  return(x)
+})
+
+# convert to dataframe
+windall_out_df <- do.call(rbind, windall_out)
+
+# list by ID of inbound commute
+windall_in_ls <- split(windall_in, windall_in$ID)
+
+# add wind parameters to the inbound commutes
+windall_in <- lapply(windall_in_ls, function(x){
+  df <- data.frame(x) 
+  x$ws <- wind_support(df$u.comp, df$v.comp, df$heading)
+  x$cw <- cross_wind(df$u.comp, df$v.comp, df$heading)
+  x$airspeed <- airspeed(x$ground.speed, x$ws, x$cw) 
+  return(x)
+})
+
+# convert to dataframe
+windall_in_df <- do.call(rbind, windall_in)
+
+# join outbound and inbound dataframes
+windall_df <- rbind(windall_out_df, windall_in_df)
+# add wind speed
+windall_df$wind.speed <- sqrt(windall_df$u.comp^2 + windall_df$v.comp^2)
+
+# change the ST of the tag local identifier of some individuals to TS
+windall_df$ID <- gsub('ST', 'TS', windall_df$ID)
+unique(windall_df$ID)
+
+windall_df$cw_abs <- abs(windall_df$cw)
+
+windall_df_sub <- windall_df %>%
+  filter(date(timestamp)<"2022-02-14")
+
+windall_df_sub$cw_abs <- abs(windall_df_sub$cw)
+
+# save dataframe of wind data
+write.csv(windall_df,file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allpaths_winddata.csv")
+# read wind data
+windall_df <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allpaths_winddata.csv")
+```

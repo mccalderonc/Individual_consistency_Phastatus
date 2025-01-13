@@ -1,0 +1,62 @@
+---
+title: "Merge data"
+author: "Camila Calderon"
+date: "2024-08-05"
+output: html_document
+---
+
+### Load libraries
+
+```{r setup}
+pacman::p_load(lubridate, dplyr, ggplot2)
+```
+
+### Load data
+
+```{r cars}
+# 2022
+load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/paper3/data/Bocas_2022_clean.RData")
+
+#2023
+load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/Bocas_2023_clean.RData")
+
+# check column names
+names(batsdf_new)
+names(batsdf2023_clean)
+```
+
+### Make all data frames match
+
+```{r, results=FALSE}
+# make columns to match all three data frames
+cols <- intersect(colnames(batsdf_new), colnames(batsdf2023_clean))
+
+# merge data frame by row
+bocas <- rbind(batsdf_new[,cols], batsdf2023_clean[,cols])
+names(bocas)
+
+# add month column
+bocas$date <- date(bocas$timestamp)
+bocas$month <- month.abb[month(bocas$date)]
+
+# check for speed to see if all looks good
+hist(bocas$ground_speed)
+bocas <- bocas %>%
+  filter(bocas$ground_speed<=16)
+unique(bocas$ID)
+
+# add year cave to the data frame
+bocas$year <- lubridate::year(bocas$date)
+bocas$year_cave <- paste(bocas$year, bocas$cave, sep="_")
+bocas$year_month<- paste(bocas$year, bocas$month, sep="_")
+bocas$year_cave[which(bocas$year_month=="2022_Feb")] <- "2022_lagruta_Feb"
+bocas$year_cave[which(bocas$year_month=="2022_Jan")] <- "2022_lagruta_Feb"
+unique(bocas$year_cave)
+
+# count how many females per year
+table(bocas$year_cave, bocas$tag_local_identifier)
+
+# save
+save(bocas, file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/clean_bocasbats.RData")
+```
+
