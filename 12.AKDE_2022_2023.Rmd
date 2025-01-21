@@ -5,7 +5,7 @@ date: "2024-09-30"
 output: html_document
 ---
 
-#Loading packages
+### Loading packages
 
 ```{r setup, include=FALSE}
 library(ctmm)
@@ -19,7 +19,7 @@ library(spatialrisk)
 library(plotly)
 ```
 
-## Loading files
+### Loading data and select foraging points
 
 ```{r load, results="hide", include=TRUE}
 ####### Load foraging data with filtered dates #####
@@ -47,7 +47,7 @@ for(i in 1:length(r$lengths)){
 
 bocas$behav[bocas$event_id=="1592348772"] <- "commuting"
 
-#select foraging points from 2022 and wet season 2023
+# select foraging points from 2022 and wet season 2023
 bats_foraging <- bocas %>%
   filter(behav=="foraging"& n>=4)
 
@@ -55,12 +55,12 @@ bats_foraging <- bocas %>%
 
 ```
 
-## Removing foraging points inside Isla Colón
+### Removing foraging points inside Isla Colón
 
 ```{r pressure, results="hide", message=FALSE, warning=FALSE}
 ###### Removing foraging points on the island with a big radios ######
 
-# Set coordinates of middle of the roost
+# set coordinates of middle of the roost
 roostlagruta <- data.frame(location.lat=9.396448, location.long=-82.271541)
 roostsena <- data.frame(location.lat=9.059652, location.long=-79.65391)
 
@@ -77,7 +77,7 @@ foragingall_noisla <- foragingall_noisla[!(foragingall_noisla$event_id %in% roos
 # plot with no foraging point on the island
 plot(foragingall_noisla$location_long, foragingall_noisla$location_lat)
 
-#check unique IDs
+# check unique IDs
 unique(foragingall_noisla$date)
 
 foragingall_noisla$season <- "dry"
@@ -104,10 +104,10 @@ mapview::mapView(bats.cave_clean, xcol="location_long", ycol="location_lat", zco
 save(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/bocas_gamboa_foragingpoints.RData")
 ```
 
-## Convert to telemetry object
+### Convert to telemetry object
 
 ```{r convert to telemetry}
-#data frame with only tracking from February
+# data frame with only tracking from February
 bats_feb <- bats.cave_clean %>% 
  filter(date> "2022-01-01" & date < "2022-03-01", tag_local_identifier!="0C506E35_G")
 #names(bats_feb)
@@ -115,12 +115,12 @@ bats_feb <- bats.cave_clean %>%
 #plot
 # mapview::mapView(bats_feb, xcol="location_long", ycol="location_lat", zcol="tag_local_identifier", legend=F, crs="EPSG:4326")
 
-#remove columns names to so that it takes IDdate as a id in the telemetry object
-bats_feb_idday <- bats_feb[,c(-22,-23,-28,-30,-33,-40,-41,-43,-51,-61)]#,-46
+# remove columns names to so that it takes IDdate as a id in the telemetry object
+bats_feb_idday <- bats_feb[,c(-22,-23,-29,-32,-40,-42,-43,-52)]#,-46
 
 save(bats_feb_idday, file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper2/analysis/data/bats_feb_idday.RData")
 
-#convert to telemetry object
+# convert to telemetry object
 tele.idday.feb <- as.telemetry(bats_feb_idday)
 tele.idday.feb[[1]]@info$projection
 ```
@@ -130,7 +130,8 @@ tele.idday.feb[[1]]@info$projection
 ```{r}
 library(doParallel)
 library(foreach)
-#calculating fits for each individual day
+
+# calculating fits for each individual day
 uere(tele.idday.feb) <- 20
 
 # include two-point equidistant projection
@@ -169,7 +170,7 @@ projection(FITS_2022)
 save(FITS_2022,file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/fits_2022_20240918.RData")#this fits works
 load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/fits_idday_Feb_20240930.RData")
 
-#calculate AKDE 
+# calculate AKDE 
 future::availableCores() 
 options(mc.cores = parallel::detectCores()) 
 
@@ -195,7 +196,7 @@ UDS_idday <- lapply(1:length(tele.idday.feb), function(i){
   return(akde_result)
 })
 
-#add names to list
+# add names to list
 names(UDS_idday) <- names(tele.idday.feb)
 
 #plot ud
@@ -220,19 +221,17 @@ plotUDS_idday <- lapply(1:length(UDS_idday), function(i) {
 
 
 ## save UDs
-save(UDS_idday,file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/udsgrid_idday_Feb_20240807.RData")
+#save(UDS_idday,file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/udsgrid_idday_Feb_20240807.RData")
 load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/udsgrid_idday_Feb_20240807.RData")
 ```
 
 
-## OVERLAP DEFINITION
+### Overlap calculation by individual day
 
 This function calculates a useful measure of similarity between distributions known as the Bhattacharyya coefficient in statistics and simply the fidelity or overlap in quantum and statistical mechanics. It is roughly speaking the ratio of the intersection area to the average individual area, but it is a direct comparison between the density functions and does not require an arbitrary quantile to be specified. When applied to ctmm objects, this function returns the overlap of the two Gaussian distributions. When applied to aligned UD objects with corresponding movement models, this function returns the overlap of their (autocorrelated) kernel density estimates.
 
-Overlap by individual day
-
 ```{r}
-#remove null objects from a list
+# remove null objects from a list
 UDS_idday_filtered <- Filter(Negate(is.null), UDS_idday)
 
 BA_ud_idday_95 <- ctmm::overlap(UDS_idday_filtered, level=.95) 
@@ -240,14 +239,14 @@ BA_ud_idday_95 <- ctmm::overlap(UDS_idday_filtered, level=.95)
 # BA_ud_idday_20 <- overlap(UDS_idday_filtered, level=.20) 
 
 
-#convert to data frame
+# convert to data frame
 library(reshape2)
 BA_ud_idday_95_df <- melt(BA_ud_idday_95$CI[,,"est"])
-#remove comparison between same ID
+# remove comparison between same ID
 BA_ud_idday_95_df <- BA_ud_idday_95_df[BA_ud_idday_95_df$Var1!=BA_ud_idday_95_df$Var2,]
-#remove duplicates
+# remove duplicates
 BA_ud_idday_95_df <- BA_ud_idday_95_df[duplicated(BA_ud_idday_95_df$value),]
-#add group and id to the table
+# add group and id to the table
 BA_ud_idday_95_df <- BA_ud_idday_95_df %>%
    mutate(id1 = str_sub(Var1, 1,10),id2 = str_sub(Var2, 1,10),
          date1=str_sub(Var1,12), date2=str_sub(Var2,12))#group1 = str_sub(Var1,10,10), group2 = str_sub(Var2,10,10), groups=paste(group1,group2, sep="_")
@@ -257,7 +256,7 @@ BA_ud_idday_95_df <- BA_ud_idday_95_df %>%
 #verify groups
 # unique(BA_ud_idday_95_df$groups)
 
-#add columns
+# add columns
 BA_ud_idday_95_df$samedate <- ifelse(BA_ud_idday_95_df$date1==BA_ud_idday_95_df$date2, "yes","no")
 BA_ud_idday_95_df$sameid <- ifelse(BA_ud_idday_95_df$id1==BA_ud_idday_95_df$id2, "yes","no")
 BA_ud_idday_95_df$period <- "dry 2022-1"
@@ -269,7 +268,7 @@ BA_ud_idday_95_df$period <- "dry 2022-1"
 # overlap_sameid95$sameid <- ifelse(overlap_sameid95$id1==overlap_sameid95$id2, "yes","no")
 # overlap_sameid95$cave <- "lagruta_2022"
 
-#plot overlap within and between individuals including same and different days
+# plot overlap within and between individuals including same and different days
 over_within <- ggplot(aes(x= sameid,y=value, fill = sameid), data=BA_ud_idday_95_df) +
  geom_boxplot(alpha = 0.5) +
   scale_fill_manual(values = c("black", "grey"))+
@@ -326,7 +325,7 @@ lapply(split(aftermarch, aftermarch$tag_local_identifier), function(x){
 ### Selecting foraging points for 2022 and 2023
 
 ```{r tracking data from 2022 and 2023}
-#foraging points of march
+# foraging points of march
 bats_2022_2023 <- bats.cave_clean%>%
   group_by(ID_batday)%>%
  filter(date>="2022-03-01")
@@ -353,11 +352,12 @@ lapply(split(bats_2022_2023_c, bats_2022_2023_c$tag_local_identifier), function(
     ggtitle(x$tag_local_identifier)
 })
 ```
+
 ### Convert to telemetry object data from 2022
 
 ```{r}
 ### only 202 data
-idday2022 <- bats_2022_2023_c[,c(-23,-24,-28,-30,-33,-41,-43,-53,-61)]%>%
+idday2022 <- bats_2022_2023_c[,c(-22,-23,-29,-32,-40,-42,-43,-52)]%>%
   filter(date<="2023-01-01")
 
 #convert to telemetry object
@@ -369,7 +369,7 @@ plot(tele2022)
 
 ### Convert to telemetry object data from 2023
 ```{r}
-bats2023 <- bats_2022_2023_c[,c(-23,-24,-28,-30,-33,-41,-43,-53,-61)] %>%
+bats2023 <- bats_2022_2023_c[,c(-22,-23,-29,-32,-40,-42,-43,-52)] %>%
   filter(date>="2023-01-01")
 
 #convert to telemetry object
@@ -412,7 +412,7 @@ projection(FITS_2022)
 save(FITS_2022,file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/fits_2022_20240918.RData")#this fits works
 load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/fits_2022_20240918.RData")
 
-load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/fits_2022-3_20240912.RData")
+#load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/fits_2022-3_20240912.RData")
 ```
 
 ### calculate UDs for individuals in march 2022 
@@ -449,7 +449,7 @@ uere(tele2023) <- 20
 # include two-point equidistant projection
 ctmm::projection(tele2023) <- median(tele2023, k=2)
 
-## backend for foreach (this works for Windows, when running on MAC you may have to use another backend method):
+# backend for foreach (this works for Windows, when running on MAC you may have to use another backend method):
 cl <- parallel::makeCluster(detectCores(), outfile = "")
 doParallel::registerDoParallel(cl)
 
@@ -488,17 +488,17 @@ UDS_2023 <- lapply(1:length(tele2023), function(i){
   return(akde_result)
 })
 
-#add names to list
+# add names to list
 names(UDS_2023) <- names(tele2023)
 
-## save UDs
+# save UDs
 save(UDS_2023,file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/udsgrid2023_20240923.RData")
 ```
 
 ### Calculate overlap for 2022 march
 
 ```{r}
-#remove null objects from a list
+# remove null objects from a list
 UDS_2022_filtered <- Filter(Negate(is.null), UDS_2022)
 UDS_2022_filtered <- UDS_2022_filtered[sapply(UDS_2022_filtered, function(x) inherits(x, "UD"))]
 
@@ -507,17 +507,16 @@ UDS_2022_filtered <- UDS_2022_filtered[sapply(UDS_2022_filtered, function(x) inh
 # leave only individuasl drom the aj cave
 UDS_2022_filtered <- UDS_2022_filtered[names(UDS_2022_filtered) %in%  c("PH_TS_011_2022-03-07", "PH_TS_011_2022-03-08", "PH_TS_011_2022-03-09", "PH_TS_011_2022-03-10", "PH_TS_011_2022-03-11", "PH_TS_011_2022-03-12", "PH_TS_011_2022-03-13", "PH_TS_011_2022-03-14", "PH_TS_011_2022-03-15", "PH_TS_011_2022-03-16", "PH_TS_011_2022-03-17", "PH_TS_014_2022-03-07", "PH_TS_014_2022-03-08", "PH_TS_014_2022-03-09", "PH_TS_014_2022-03-10", "PH_TS_014_2022-03-11", "PH_TS_014_2022-03-12", "PH_TS_014_2022-03-13", "PH_TS_014_2022-03-14", "PH_TS_016_2022-03-09", "PH_TS_016_2022-03-10", "PH_TS_074_2022-03-08", "PH_TS_074_2022-03-09", "PH_TS_074_2022-03-10", "PH_TS_074_2022-03-11", "PH_TS_074_2022-03-12", "PH_TS_016_2022-03-11", "PH_TS_016_2022-03-16", "PH_TS_016_2022-03-17",  "PH_TS_079_2022-03-10", "PH_TS_079_2022-03-11", "PH_TS_079_2022-03-12", "PH_TS_079_2022-03-13", "PH_TS_079_2022-03-14", "PH_TS_079_2022-03-15", "PH_TS_079_2022-03-18", "PH_TS_080_2022-03-08", "PH_TS_080_2022-03-09", "PH_TS_080_2022-03-10", "PH_TS_080_2022-03-11", "PH_TS_080_2022-03-12", "PH_TS_080_2022-03-14", "PH_TS_080_2022-03-16", "PH_TS_080_2022-03-17", "PH_TS_080_2022-03-19", "PH_TS_080_2022-03-20", "PH_TS_080_2022-03-21", "PH_TS_083_2022-03-08", "PH_TS_083_2022-03-09", "PH_TS_083_2022-03-10", "PH_TS_083_2022-03-11", "PH_TS_083_2022-03-13", "PH_TS_098_2022-03-07", "PH_TS_098_2022-03-08", "PH_TS_098_2022-03-09", "PH_TS_112_2022-03-09", "PH_TS_112_2022-03-11",  "PH_TS_112_2022-03-12", "PH_TS_113_2022-03-08", "PH_TS_113_2022-03-10", "PH_TS_113_2022-03-12", "PH_TS_120_2022-03-08", "PH_TS_120_2022-03-09", "PH_TS_121_2022-03-08", "PH_TS_121_2022-03-10", "PH_TS_121_2022-03-11", "PH_TS_121_2022-03-14") == TRUE] #individual 100 does not calculate good AKDE
 
-
 BA_ud_2022_95 <- ctmm::overlap(UDS_2022_filtered, level=.95) 
 
-#convert to data frame
+# convert to data frame
 library(reshape2)
 BA_ud_2022_95_df <- melt(BA_ud_2022_95$CI[,,"est"])
-#remove comparison between same ID
+# remove comparison between same ID
 BA_ud_2022_95_df <- BA_ud_2022_95_df[BA_ud_2022_95_df$Var1!=BA_ud_2022_95_df$Var2,]
-#remove duplicates
+# remove duplicates
 BA_ud_2022_95_df <- BA_ud_2022_95_df[duplicated(BA_ud_2022_95_df$value),]
-#add group and id to the table
+# add group and id to the table
 BA_ud_2022_95_df <- BA_ud_2022_95_df %>%
    mutate(id1 = str_sub(Var1, end=-12),id2 = str_sub(Var2, end=-12),
          date1=str_sub(Var1,-10), date2=str_sub(Var2,-10))
@@ -526,7 +525,7 @@ BA_ud_2022_95_df$sameid <- ifelse(BA_ud_2022_95_df$id1==BA_ud_2022_95_df$id2, "y
 BA_ud_2022_95_df$samedate <- ifelse(BA_ud_2022_95_df$date1==BA_ud_2022_95_df$date2, "yes", "no")
 BA_ud_2022_95_df$period <- "dry 2022-2"
 
-#plot overlap within  and between individuals
+# plot overlap within  and between individuals
 within_between_2022 <- ggplot(aes(x=sameid, y=value, color=sameid), data=BA_ud_2022_95_df) +
    geom_jitter(aes(color=sameid, alpha=0.5), position = position_jitter(0.2)) + 
 stat_summary(fun = mean, color = "black") +
@@ -581,24 +580,24 @@ within_between_2022
 ### Calculate overlap for August 2023
 
 ```{r}
-#remove null objects from a list
+# remove null objects from a list
 UDS_2023_filtered <- Filter(Negate(is.null), UDS_2023)
 UDS_2023_filtered <- UDS_2023_filtered[sapply(UDS_2023_filtered, function(x) inherits(x, "UD"))]
 
-#removes ID with only one day
-#UDS_2023_filtered <- UDS_2023_filtered[c(-15, -16,-20)]
+# removes ID with only one day
+# UDS_2023_filtered <- UDS_2023_filtered[c(-15, -16,-20)]
 
 UDS_2023_filtered <- UDS_2023_filtered[names(UDS_2023_filtered)%in% c("PHYL1_2023-08-15","PHYL1_2023-08-17","PHYL38_2023-08-12","PHYL38_2023-08-14", "PHYL39_2023-08-13" , "PHYL39_2023-08-14")==FALSE] 
 
 BA_ud_2023_95 <- ctmm::overlap(UDS_2023_filtered, level=.95) 
 
-#convert to data frame
+# convert to data frame
 BA_ud_2023_95_df <- melt(BA_ud_2023_95$CI[,,"est"])
-#remove comparison between same ID
+# remove comparison between same ID
 BA_ud_2023_95_df <- BA_ud_2023_95_df[BA_ud_2023_95_df$Var1!=BA_ud_2023_95_df$Var2,]
-#remove duplicates
+# remove duplicates
 BA_ud_2023_95_df <- BA_ud_2023_95_df[duplicated(BA_ud_2023_95_df$value),]
-#add group and id to the table
+# add group and id to the table
 BA_ud_2023_95_df <- BA_ud_2023_95_df %>%
    mutate(id1 = str_sub(Var1, end=-12),id2 = str_sub(Var2, end=-12),
          date1=str_sub(Var1,-10), date2=str_sub(Var2,-10))
@@ -607,7 +606,7 @@ BA_ud_2023_95_df$sameid <- ifelse(BA_ud_2023_95_df$id1==BA_ud_2023_95_df$id2, "y
 BA_ud_2023_95_df$samedate <- ifelse(BA_ud_2023_95_df$date1==BA_ud_2023_95_df$date2, "yes", "no")
 BA_ud_2023_95_df$period <- "wet 2023"
 
-#plot overlap within  and between individuals
+# plot overlap within  and between individuals
 within_between_2023 <- ggplot(aes(x=sameid, y=value), data=BA_ud_2023_95_df) +
   geom_boxplot()+
   geom_jitter()+
@@ -659,11 +658,13 @@ within_between_2023
 # over_between_2023
 ```
 
-### Make plot and test overlap
+### Make plot of overlap
 ```{r}
 #join dataframes
 overlap_all <- rbind(BA_ud_idday_95_df, BA_ud_2022_95_df, BA_ud_2023_95_df)
 overlap_all$sameid <- factor(overlap_all$sameid, levels=c("yes","no"))
+
+write.csv(overlap_all, file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/overlap_data.csv")
 
 ## overlap with only pairwise comparison between individuals in the same dates
 overlap_all_sub <- overlap_all%>%
@@ -671,13 +672,13 @@ overlap_all_sub <- overlap_all%>%
 
 library(ggh4x)# for dinamic color in facewraps
 
-# Only colour strips in x-direction
+# only colour strips in x-direction
 strip <- strip_themed(background_x = elem_list_rect(fill = c("#756BB1", "#21918c","#F0E442"), alpha=c(0.5)))
-# Necessary to put RH% into the facet labels
+# necessary to put RH% into the facet labels
 period_names <- as_labeller(
      c(`dry 2022-1` = "Dry 2022-1", `dry 2022-2` = "Dry 2022-2",`wet 2023` = "Wet 2023"))
 
-#make plot
+# make plot
 within_between_all <- ggplot(aes(x=sameid, color=sameid, group=sameid), data=overlap_all) +
   scale_color_manual(values = c("black", "grey"))+
   geom_jitter(aes(y=value, alpha=sameid), position = position_jitterdodge(jitter.width = 0.3, jitter.height = 0.05))+
@@ -704,16 +705,8 @@ within_between_all <- ggplot(aes(x=sameid, color=sameid, group=sameid), data=ove
 within_between_all
 
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/akde/overlap_all_fig.pdf", width = 5, height = 5)
-
-library(patchwork)
-### Composite figure area and patches
-(within_between_all / cluster_plot) + plot_layout(axes = "collect_x") + plot_annotation(tag_levels = "A") &
-  theme(
-    plot.tag = element_text(size = 20)  # Customize tag size and appearance
-  )
-
-ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/overlap_patches.pdf", width = 10, height = 9)
 ```
+
 ### Plot overlap by id
 ```{r}
 ind_overlap <- overlap_all%>%
@@ -744,9 +737,8 @@ ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/akde/o
 
 ```
 
-###Test overlap
+### Test overlap
 ```{r}
-
 library(rptR)
 library(lme4)
 library(glmmTMB)
@@ -755,7 +747,7 @@ library(DHARMa)
 overlap_all$pairs <- paste(overlap_all$id1, overlap_all$id2, sep="_")
 overlap_all$date <- paste(overlap_all$date1, overlap_all$date2, sep="_")
 
-#convert zeros to positive values
+# convert zeros to positive values
 epsilon <- 1e-6
 overlap_all$value[which(overlap_all$value==0)] <- epsilon
 overlap_all$value[which(overlap_all$value==1)] <- 1-epsilon
@@ -764,11 +756,11 @@ hist(overlap_all$value)
 
 # model
 
-# Logit transformation
+# logit transformation
 overlap_all$logit_value <- log(overlap_all$value / (1 - overlap_all$value))
 hist(overlap_all$logit_value)
 
-# Fit the model using the transformed response
+# fit the model using the transformed response
 model <- lmer(logit_value ~ sameid* period + (1 | pairs), data = overlap_all)
 
 summary(model)
@@ -784,7 +776,7 @@ m_ove_beta <- glmmTMB(value ~ period*sameid+(1|pairs)+(1|date),
 summary(m_ove_beta)
 car::Anova(m_ove_beta)
 
-# Example: Marginal effect of `perioddry 2022-2` at the mean linear predictor
+# example: marginal effect of `perioddry 2022-2` at the mean linear predictor
 linear_predictor <- 0.2327  # Replace with fitted value for a specific condition
 std_normal_pdf <- pnorm(linear_predictor)
 estimate_no <- pnorm(0.2327 - 1.4815)  # Replace with the coefficient of interest
@@ -792,7 +784,7 @@ withinoverlap_dry2 <- pnorm(linear_predictor + 0.5737)
 overlap_wet <- pnorm(linear_predictor + 0.1439)
 
 
-# Check residuals
+# check residuals
 plot(residuals(m_ove_beta), main = "Residuals of Zero-Inflated Beta Model")
 hist(residuals(m_ove_beta), main = "Histogram of Residuals")
 
@@ -806,7 +798,7 @@ m_ove_beta_logit <- glmmTMB(value ~ period*sameid+(1|pairs)+(1|date),
 
 summary(m_ove_beta_logit)
 
-# Check residuals
+# check residuals
 plot(residuals(m_ove_beta_logit), main = "Residuals of Zero-Inflated Beta Model")
 hist(residuals(m_ove_beta_logit), main = "Histogram of Residuals")
 
@@ -817,7 +809,7 @@ m_ove_beta_nozi <- glmmTMB(value ~ period*sameid+(1|pairs)+(1|date),
                             data = overlap_all,
                             family = beta_family(link = "logit"))
 
-# Check residuals
+# check residuals
 plot(residuals(m_ove_beta_nozi), main = "Residuals of Zero-Inflated Beta Model")
 hist(residuals(m_ove_beta_nozi), main = "Histogram of Residuals")
 
@@ -847,11 +839,11 @@ safe_as_sf <- purrr::safely(function(ud) {
   ctmm::as.sf(ud, level.UD = 0.95)
 })
 
-# Attempt to convert each UD object
+# attempt to convert each UD object
 safely_converted <- UDS_idday_filtered %>% 
   purrr::map(safe_as_sf)
 
-# Extract only successful conversions
+# extract only successful conversions
 valid_sf_objects <- safely_converted %>%
   purrr::map("result") %>%
   purrr::compact() # remove NULLs (i.e., failed conversions)
@@ -903,7 +895,7 @@ register_stadiamaps("")
 e <- make_bbox(location_long, location_lat, data = bats_feb, f = .70)
 
 
-#plot by id_day
+# plot by id_day
 fld <-"/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/akde/"
 # i=2
 for(i in 1:length(unique(CI_idday_sf$ind))){

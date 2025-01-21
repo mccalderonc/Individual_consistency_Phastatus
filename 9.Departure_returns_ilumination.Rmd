@@ -87,7 +87,6 @@ while (!is.null(dev.list()))
 ```
 
 ### Select commuting paths to extract departure times
-
 ```{r}
 # filter only commuting with 5 or more points in a row
 bats_commufeb <- bats_feb  %>%  
@@ -113,6 +112,8 @@ commu_feb_dep$cave_group <-  firstforaging$group_id
 commu_feb_dep$time <- format(commu_feb_dep$timestamp, format = "%H:%M:%S")
 commu_feb_dep$time <- as.POSIXct(commu_feb_dep$time, format = "%H:%M:%S", tz="UTC")
 commu_feb_dep$time_num <-  as.numeric(as_hms(commu_feb_dep$time)) #time in a numeric value
+
+
 ```
 
 ### Extract return times
@@ -223,12 +224,12 @@ ggplot(dep_diff_feb, aes(x=sameid, y=Deptimediff))+
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/depdiff_sameid_yesno.pdf", width=15, height=5)
 
 # plot as a heat map
-ggplot(aes(x=bat1, y=bat2, fill=Deptimediff), data = dep_diff_feb)+
-  geom_tile()+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
-  ggtitle("February")+
-  xlab("bats")+
-  ylab("bats")
+# ggplot(aes(x=bat1, y=bat2, fill=Deptimediff), data = dep_diff_feb)+
+#   geom_tile()+
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+#   ggtitle("February")+
+#   xlab("bats")+
+#   ylab("bats")
 
 ```
 
@@ -365,7 +366,7 @@ ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/retdif
 library(readxl)
 dep_ret_march <- read_csv("~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_returns_march_2.csv")
 
-#Animal 098 is not there find out
+# animal 098 is not there find out
 dep_ret_march$date <- date(dep_ret_march$departure_start)
 
 #to extract tag id and include in the dataframe
@@ -373,7 +374,7 @@ dep_ret_march <- dep_ret_march %>%
   mutate(tag_local_identifier = str_sub(Tag, start = 1, end = 9))%>%
   filter(tag_local_identifier!="PH_TS_056")#remove one individual with only two nights of tracking
 
-#use only complete information
+# use only complete information
 commu_march_dep <- dep_ret_march %>%
   filter(`use in analysis`=="yes"& cave_group=="ajcave") 
 
@@ -392,10 +393,10 @@ commu_march_dep <- commu_march_dep%>%
 ### Calculate pairwise comparison in departures within and between ids
 
 ```{r}
-#split data frame by id
+# split data frame by id
 commu_march_dep_id <- split(commu_march_dep, f=commu_march_dep$tag_local_identifier)
 
-#Calculate departure time difference by idday
+# calculate departure time difference by idday
 dep_diff_march_id <-  rbindlist(lapply(commu_march_dep_id, FUN=function(t){
   combi <- t(combn(as.character(t$date), 2)) # all unique pairwise combinations of individuals
   bat <- unique(t$tag_local_identifier)# UTC time
@@ -414,14 +415,13 @@ dep_diff_march_id <-  rbindlist(lapply(commu_march_dep_id, FUN=function(t){
   return(combi)
 }))
 
-#convert negative to positive values
+# convert negative to positive values
 dep_diff_march_id$Deptimediff <- abs(dep_diff_march_id$Deptimediff)
 dep_diff_march_id$bat1 <- dep_diff_march_id$bat
 dep_diff_march_id$bat2 <- dep_diff_march_id$bat
 dep_diff_march_id$cave <- "dry_2022-2"
 dep_diff_march_id$sameid <- "yes"
 
-# split by day
 # split by day
 commu_march_dep_day <- split(commu_march_dep, f=commu_march_dep$date)
 
@@ -443,10 +443,10 @@ dep_diff_march_day <- rbindlist(lapply(commu_march_dep_day[1:11], FUN=function(t
   return(combi)
 }))
 
-#convert negative to positive values
+# convert negative to positive values
 dep_diff_march_day$Deptimediff <- abs(dep_diff_march_day$Deptimediff)
 
-#ad cave identity
+# add cave identity
 dep_diff_march_day$cave1 <- commu_march_dep$cave_group[match(dep_diff_march_day$bat1, commu_march_dep$tag_local_identifier)]
 dep_diff_march_day$cave2 <- commu_march_dep$cave_group[match(dep_diff_march_day$bat2, commu_march_dep$tag_local_identifier)]
 dep_diff_march_day$cave <- "dry_2022-2"
@@ -456,13 +456,13 @@ dep_diff_march_day$date1 <- as.character(dep_diff_march_day$date)
 dep_diff_march_day$date2 <- as.character(dep_diff_march_day$date)
 #dep_diff_march_day$bat <-paste(dep_diff_march_day$bat1,dep_diff_march_day$bat2, sep="_")
 
-#filter comparison between individuals of the same cave
+# filter comparison between individuals of the same cave
 dep_diff_march_day <- dep_diff_march_day[dep_diff_march_day$samecave=="yes",]
 
-#merge two dataframes
+# merge two dataframes
 dep_diff_march <- rbind(dep_diff_march_id[,c("bat1","bat2","date1","date2","Deptimediff", "cave","sameid")], dep_diff_march_day[,c("bat1","bat2","date1","date2","Deptimediff", "cave","sameid")])
 
-#plot departure time difference for individuals
+# plot departure time difference for individuals
 ggplot(dep_diff_march, aes(x=sameid, y=Deptimediff))+
   geom_boxplot()+
   geom_jitter()+
@@ -510,12 +510,12 @@ commu_march_dep$return_stop<- as.POSIXct(commu_march_dep$return_stop, format = "
 commu_march_dep$time_ret <- format(as.POSIXct(commu_march_dep$return_stop), format = "%H:%M:%S")
 commu_march_dep$time_ret <- as.POSIXct(commu_march_dep$time_ret, format = "%H:%M:%S", tz="UTC")
 commu_march_dep <- commu_march_dep %>%
-  filter(Tag!="PH_TS_120_2022-03-11")#return time is wrong
+  filter(Tag!="PH_TS_120_2022-03-11")# return time is wrong
 
-#split data frame by id
+# split data frame by id
 commu_march_ret_id <- split(commu_march_dep, f=commu_march_dep$tag_local_identifier)
 
-#Calculate departure time difference by idday
+# calculate departure time difference by idday
 ret_diff_march_id <-  rbindlist(lapply(commu_march_ret_id, FUN=function(t){
    combi <- t(combn(as.character(date(t$return_start)), 2)) # all unique pairwise combinations of individuals
    bat <- unique(t$tag_local_identifier)# UTC time
@@ -530,14 +530,14 @@ ret_diff_march_id <-  rbindlist(lapply(commu_march_ret_id, FUN=function(t){
    return(combi)
    }))
 
-#convert negative to positive values
+# convert negative to positive values
 ret_diff_march_id$Deptimediff <- abs(ret_diff_march_id$Deptimediff)
 ret_diff_march_id$bat1 <- ret_diff_march_id$bat
 ret_diff_march_id$bat2 <- ret_diff_march_id$bat
 ret_diff_march_id$cave <- "dry_2022-2"
 ret_diff_march_id$sameid <- "yes"
 
-#split data frame by date
+#  split data frame by date
 commu_march_ret_day <- split(commu_march_dep, f=commu_march_dep$date)
 
 ret_diff_march_day <-  rbindlist(lapply(commu_march_ret_day[1:12], FUN=function(t){
@@ -553,10 +553,10 @@ ret_diff_march_day <-  rbindlist(lapply(commu_march_ret_day[1:12], FUN=function(
   return(combi)
   }))
 
-#convert negative to positive values
+# convert negative to positive values
 ret_diff_march_day$Deptimediff <- abs(ret_diff_march_day$Deptimediff)
 
-#ad cave identity
+# add cave identity
 ret_diff_march_day$cave1 <- commu_march_dep$cave_group[match(ret_diff_march_day$bat1, commu_march_dep$tag_local_identifier)]
 ret_diff_march_day$cave2 <- commu_march_dep$cave_group[match(ret_diff_march_day$bat2, commu_march_dep$tag_local_identifier)]
 ret_diff_march_day$cave <- "dry_2022-2" 
@@ -566,13 +566,13 @@ ret_diff_march_day$date1 <- as.character(ret_diff_march_day$date)
 ret_diff_march_day$date2 <- as.character(ret_diff_march_day$date)
 #ret_diff_march_day$bat <-paste(ret_diff_march_day$bat1,ret_diff_march_day$bat2, sep="_")
 
-#filter comparison between individuals of the same cave
+# filter comparison between individuals of the same cave
 ret_diff_march_day <- ret_diff_march_day[ret_diff_march_day$samecave=="yes",]
 
-#merge two dataframes
+# merge two dataframes
 ret_diff_march <- rbind(ret_diff_march_id[,c("bat1","bat2","date1","date2","Deptimediff", "cave","sameid")], ret_diff_march_day[,c("bat1","bat2","date1","date2","Deptimediff", "cave","sameid")])
 
-#plot departure time difference for individuals
+# plot departure time difference for individuals
 ggplot(ret_diff_march, aes(x=sameid, y=Deptimediff))+
   geom_boxplot()+
   geom_jitter()+
@@ -590,34 +590,32 @@ ggplot(ret_diff_march, aes(x=sameid, y=Deptimediff))+
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/retdiff_march_sameid.pdf", width=15, height=5)
 ```
 
-
-
 ## Extract departure times for 2023 data
 
 ```{r}
 bats_2023 <- hast_df%>%
   filter(date>"2023-01-01")
 
-#split data frame by ID_day
+# split data frame by ID_day
 bats_2023_split <- split(bats_2023, bats_2023$ID)
 
 bats_2023_split <- bats_2023_split[names(bats_2023_split)%in% c("PHYL11_2023-08-15", "PHYL11_2023-08-16", "PHYL11_2023-08-17", "PHYL11_2023-08-18", "PHYL16_2023-08-14", "PHYL16_2023-08-15",  "PHYL21_2023-08-18", "PHYL24_2023-08-15", "PHYL21_2023-08-17", "PHYL25_2023-08-14", "PHYL25_2023-08-15", "PHYL25_2023-08-16",  "PHYL25_2023-08-18", "PHYL27_2023-08-15",   "PHYL35_2023-08-14", "PHYL39_2023-08-14",  "PHYL7_2023-08-16", "PHYL7_2023-08-16","PHYL7_2023-08-17", "PHYL7_2023-08-18")==TRUE]
 
 bats_2023 <- do.call(rbind, bats_2023_split)
 
-#filter only commuting with more than 5 points in a row
+# filter only commuting with more than 5 points in a row
 bats_commu2023 <- bats_2023  %>% 
   filter(behav=="commuting" & n>=10)
 
 ggplot(aes(x=location_long, y=location_lat, col=ID), data=bats_commu2023) + geom_point()
 
-#take the first row of each id date in the commuting tracks
+# take the first row of each id date in the commuting tracks
 commu_2023_dep <- bats_commu2023 %>%
   group_by(ID) %>%
   slice(which.min(1:n()))
 
 
-#add time to the data frame
+# add time to the data frame
 commu_2023_dep$time <- format(commu_2023_dep$timestamp, format = "%H:%M:%S")
 commu_2023_dep$time <- as.POSIXct(commu_2023_dep$time, format = "%H:%M:%S", tz="UTC")
 commu_2023_dep$time_num <-  as.numeric(as_hms(commu_2023_dep$time))
@@ -625,13 +623,13 @@ commu_2023_dep$time_num <-  as.numeric(as_hms(commu_2023_dep$time))
 ```
 
 
-### Calculate pairiwise departure times for 2023
+### Calculate pairwise departure times for 2023
 ```{r}
-#split data frame by id
+# split data frame by id
 commu_2023_dep <- commu_2023_dep[commu_2023_dep$tag_local_identifier!="PHYL1",]
 commu_2023_dep_id <- split(commu_2023_dep, f=commu_2023_dep$tag_local_identifier)
 
-#Calculate departure time difference by idday
+# calculate departure time difference by idday
 dep_diffid_2023<-  rbindlist(lapply(commu_2023_dep_id, FUN=function(t){
   combi <- t(combn(as.character(t$date), 2)) # all unique pairwise combinations of individuals
   bat <- unique(t$tag_local_identifier)# UTC time
@@ -639,19 +637,19 @@ dep_diffid_2023<-  rbindlist(lapply(commu_2023_dep_id, FUN=function(t){
   combi <- combi[combi$date1!=combi$date2,]# just in case that a single bat has two readings for the same timestamp
   
   combi$Deptimediff <- unlist(lapply(1:nrow(combi), function(i){ # calculate time difference between all pairs (in meters!!)
-    pos.time1<- t[t$date==combi$date1[i], c('time')] # location for first bat
-    pos.time2 <- t[t$date==combi$date2[i], 'time'] # location for second bat
+    pos.time1<- t[t$date==combi$date1[i], c('time')] # time for first bat
+    pos.time2 <- t[t$date==combi$date2[i], 'time'] # time for second bat
     return(difftime(pos.time1$time, pos.time2$time, units="mins"))})) # geographic distance between bats (in meters)
   return(combi)
   }))
 
-#convert negative to positive values
+# convert negative to positive values
 dep_diffid_2023$Deptimediff <- abs(dep_diffid_2023$Deptimediff)
 dep_diffid_2023$bat1 <- dep_diffid_2023$bat
 dep_diffid_2023$bat2 <- dep_diffid_2023$bat
 dep_diffid_2023$sameid <- "yes"
 dep_diffid_2023$date <- paste(dep_diffid_2023$date1, dep_diffid_2023$date2, sep="_")
-#subset dataframe
+# subset dataframe
 dep_diffid_2023_sub <- dep_diffid_2023[,c("bat1","bat2","date1","date2","sameid","Deptimediff")]
 dep_diffid_2023_sub$cave <- "2023_wet"
 
@@ -665,13 +663,13 @@ dep_diff_day_2023 <-  rbindlist(lapply(commu_2023_dep_day, FUN=function(t){
   combi <- combi[combi$bat1!=combi$bat2,]# just in case that a single bat has two readings for the same timestamp
   
   combi$Deptimediff <- unlist(lapply(1:nrow(combi), function(i){ # calculate time difference between all pairs (in meters!!)
-    pos.time1<- t[t$tag_local_identifier==combi$bat1[i], 'timestamp'] # location for first bat
-    pos.time2 <- t[t$tag_local_identifier==combi$bat2[i], 'timestamp'] # location for second bat
+    pos.time1<- t[t$tag_local_identifier==combi$bat1[i], 'timestamp'] # time for first bat
+    pos.time2 <- t[t$tag_local_identifier==combi$bat2[i], 'timestamp'] # time for second bat
     return(difftime(pos.time1$timestamp, pos.time2$timestamp, units="mins"))})) # geographic distance between bats (in meters)
   return(combi)
   }))
 
-#convert negative to positive values
+# convert negative to positive values
 dep_diff_day_2023$Deptimediff <- abs(dep_diff_day_2023$Deptimediff)
 
 dep_diff_day_2023 <- dep_diff_day_2023 %>%
@@ -685,10 +683,10 @@ dep_diff_day_sub_2023 <- dep_diff_day_2023[,c("bat1","bat2","date1","date2","sam
 dep_diff_day_sub_2023$cave <- "2023_wet"
 dep_diff_day_sub_2023$samecave <-"yes"
 
-#joint two dataframes
+# joint two dataframes
 dep_diff_2023 <- rbind(dep_diffid_2023_sub[,c("bat1","bat2","date1","date2","sameid","Deptimediff","cave")], dep_diff_day_sub_2023[,c("bat1","bat2","date1","date2","sameid","Deptimediff","cave")])
 
-#plot departure time difference for individuals
+# plot departure time difference for individuals
 ggplot(dep_diff_2023, aes(x=sameid, y=Deptimediff))+
   geom_boxplot()+
   geom_jitter()+
@@ -720,10 +718,10 @@ commu_2023_ret$time_num <-  as.numeric(as_hms(commu_2023_ret$time))
 ### Calculate return times for 2023
 
 ```{r}
-#split data frame by id
+# split data frame by id
 commu_2023_ret_id <- split(commu_2023_ret, f=commu_2023_ret$tag_local_identifier)
 
-#Calculate departure time difference by idday
+# calculate departure time difference by idday
 ret_diffid_2023<-  rbindlist(lapply(commu_2023_ret_id, FUN=function(t){
   combi <- t(combn(as.character(t$date), 2)) # all unique pairwise combinations of individuals
   bat <- unique(t$tag_local_identifier)# UTC time
@@ -731,19 +729,19 @@ ret_diffid_2023<-  rbindlist(lapply(commu_2023_ret_id, FUN=function(t){
   combi <- combi[combi$date1!=combi$date2,]# just in case that a single bat has two readings for the same timestamp
   
   combi$Deptimediff <- unlist(lapply(1:nrow(combi), function(i){ # calculate time difference between all pairs (in meters!!)
-    pos.time1<- t[t$date==combi$date1[i], c('time')] # location for first bat
-    pos.time2 <- t[t$date==combi$date2[i], 'time'] # location for second bat
+    pos.time1<- t[t$date==combi$date1[i], c('time')] # time for first bat
+    pos.time2 <- t[t$date==combi$date2[i], 'time'] # time for second bat
     return(difftime(pos.time1$time, pos.time2$time, units="mins"))})) # geographic distance between bats (in meters)
   return(combi)
   }))
 
-#convert negative to positive values
+# convert negative to positive values
 ret_diffid_2023$Deptimediff <- abs(ret_diffid_2023$Deptimediff)
 ret_diffid_2023$bat1 <- ret_diffid_2023$bat
 ret_diffid_2023$bat2 <- ret_diffid_2023$bat
 ret_diffid_2023$sameid <- "yes"
 ret_diffid_2023$date <- paste(ret_diffid_2023$date1, ret_diffid_2023$date2, sep="_")
-#subset dataframe
+# subset dataframe
 ret_diffid_20233_sub <- ret_diffid_2023[,c("bat1","bat2","date1","date2","sameid","Deptimediff")]
 ret_diffid_20233_sub$cave <- "2023_wet"
 
@@ -757,13 +755,13 @@ ret_diff_day_2023 <-  rbindlist(lapply(commu_2023_ret_day[c(-1)], FUN=function(t
   combi <- combi[combi$bat1!=combi$bat2,]# just in case that a single bat has two readings for the same timestamp
   
   combi$Deptimediff <- unlist(lapply(1:nrow(combi), function(i){ # calculate time difference between all pairs (in meters!!)
-    pos.time1<- t[t$tag_local_identifier==combi$bat1[i], 'timestamp'] # location for first bat
-    pos.time2 <- t[t$tag_local_identifier==combi$bat2[i], 'timestamp'] # location for second bat
+    pos.time1<- t[t$tag_local_identifier==combi$bat1[i], 'timestamp'] # time for first bat
+    pos.time2 <- t[t$tag_local_identifier==combi$bat2[i], 'timestamp'] # time for second bat
     return(difftime(pos.time1$timestamp, pos.time2$timestamp, units="mins"))})) # geographic distance between bats (in meters)
   return(combi)
   }))
 
-#convert negative to positive values
+# convert negative to positive values
 ret_diff_day_2023$Deptimediff <- abs(ret_diff_day_2023$Deptimediff)
 
 ret_diff_day_2023 <- ret_diff_day_2023 %>%
@@ -782,10 +780,10 @@ ret_diff_day_sub_2023$date2 <- as.character(ret_diff_day_sub_2023$date2)
 #ret_diff_day_sub_2023$samecave <-"yes"
 ret_diff_day_sub_2023$cave <- "2023_wet"
 
-#joint two dataframes
+# joint two dataframes
 ret_diff_2023 <- rbind(ret_diffid_20233_sub[,c("bat1","bat2","date1","date2","sameid","Deptimediff","cave")], ret_diff_day_sub_2023[,c("bat1","bat2","date1","date2","sameid","Deptimediff","cave")])
 
-#plot departure time difference for individuals
+# plot departure time difference for individuals
 ggplot(ret_diff_2023, aes(x=sameid, y=Deptimediff))+
   geom_boxplot()+
   geom_jitter()+
@@ -803,6 +801,7 @@ ggplot(ret_diff_2023, aes(x=sameid, y=Deptimediff))+
 ```
 ### Combine departure and return dataframes
 ```{r}
+# combine departure dataframes
 depdiff_all <- rbind(dep_diff_feb, dep_diff_march,dep_diff_2023)
 depdiff_all$season <- factor(depdiff_all$cave, levels = c("dry_2022-1","dry_2022-2", "2023_wet"), labels = c("dry 2022-1","dry 2022-2", "2023 wet"))
 depdiff_all$sameid <- factor(depdiff_all$sameid, levels=c("yes","no"))
@@ -816,13 +815,23 @@ depdiff_all$groups[which(depdiff_all$groups=="_")] <- "NA"
 
 write.csv(depdiff_all,file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/alldepartures.csv")
 
-# Only colour strips in x-direction
+# combine return dataframes
+ret_diff_all <- rbind(ret_diff_feb, ret_diff_march,ret_diff_2023)
+ret_diff_all$season <- factor(ret_diff_all$cave, levels = c("dry_2022-1","dry_2022-2", "2023_wet"), labels = c("dry 2022-1","dry 2022-2", "2023 wet"))
+ret_diff_all$sameid <- factor(ret_diff_all$sameid, levels=c("yes","no"))
+
+write.csv(ret_diff_all,file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allreturns.csv")
+```
+### Plot departure and return times pairwise difference for all tracking periods
+```{r}
+# only color strips in x-direction
 library(ggh4x)
 strip <- strip_themed(background_x = elem_list_rect(fill = c("#756BB1", "#21918c","#F0E442"), alpha=c(0.5)))
-# Necessary to put RH% into the facet labels
+# necessary to put RH% into the facet labels
 period_names <- as_labeller(
      c(`dry 2022-1` = "Dry 2022-1", `dry 2022-2` = "Dry 2022-2",`2023 wet` = "Wet 2023"))
 
+# plot departure time difference
 dep_plot <- ggplot(data=depdiff_all, aes(x=sameid, color=sameid, group = sameid))+
   scale_color_manual(values = c("black", "grey"))+
   geom_jitter(aes(y = Deptimediff,  alpha=sameid), position = position_jitterdodge(jitter.width = 0.4, jitter.height = 0.05))+
@@ -847,12 +856,7 @@ dep_plot <- ggplot(data=depdiff_all, aes(x=sameid, color=sameid, group = sameid)
 
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/departure_all.pdf")
 
-ret_diff_all <- rbind(ret_diff_feb, ret_diff_march,ret_diff_2023)
-ret_diff_all$season <- factor(ret_diff_all$cave, levels = c("dry_2022-1","dry_2022-2", "2023_wet"), labels = c("dry 2022-1","dry 2022-2", "2023 wet"))
-ret_diff_all$sameid <- factor(ret_diff_all$sameid, levels=c("yes","no"))
-
-write.csv(ret_diff_all,file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allreturns.csv")
-
+# plot return time difference
 ret_plot <- ggplot(data=ret_diff_all, aes(x=sameid, color=sameid, group = sameid))+
   scale_color_manual(values = c("black", "grey"))+
   geom_jitter(aes(y = Deptimediff,  alpha=sameid), position = position_jitterdodge(jitter.width = 0.2, jitter.height = 0.05))+
@@ -877,19 +881,6 @@ ret_plot <- ggplot(data=ret_diff_all, aes(x=sameid, color=sameid, group = sameid
 
 ret_plot
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/return_all.pdf", width = 7, height = 5)
-```
-
-### composite figure
-```{r}
-dep_plot/dep_ilu_ws  + 
-  plot_annotation(tag_levels = ("A"))+ 
-  plot_layout(axes='collect_x') & 
-  theme(
-    plot.tag = element_text(size = 20)  # Customize tag size and appearance
-  )
-
-ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/depart_moonlight_wspeed.pdf", height=10, width=10)
-
 ```
 
 ### Test individual time departure difference within same and different individuals
@@ -1016,7 +1007,6 @@ mean_ret <- ret_diff_all %>%
 
 ```
 
-
 ### Calculating departures after sunset for each individual in february
 ```{r}
 commu_feb_dep$minTimeLocal <- with_tz(commu_feb_dep$timestamp, tz="America/Panama")
@@ -1052,10 +1042,10 @@ sunset_dep_feb<- ggplot(commu_feb_dep, aes(x=date, y=as.numeric(timeSinceSunset)
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/deptime_sunset.pdf", width=15, height=5)
 
 # plot time after sunset by id/date
-ggplot(commu_feb_dep, aes(x=as.character(date), y=timeSinceSunset, colour= tag_local_identifier))+
-  geom_path()+
-  geom_point()
-ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/deptime_sunset_id.pdf", width=15, height=5)
+# ggplot(commu_feb_dep, aes(x=as.character(date), y=timeSinceSunset, colour= tag_local_identifier))+
+#   geom_path()+
+#   geom_point()
+# ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/deptime_sunset_id.pdf", width=15, height=5)
 ```
 
 ### Calculating departures after sunset for each individual in march
@@ -1141,15 +1131,17 @@ ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/deptim
 sunset_dep_feb+sunset_dep_march + plot_layout(axes ='collect')
 
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/deptime_sunset_all.pdf", height=5, width = 7)
-
 ```
 
-### How does departure time difference related to moon light?
+### How does departure time difference related to moonlight intensity?
+
+Now I look at how departure times relate to the moonlight intensity across the days in the different periods
+
 ```{r}
 #install.packages("calendR")
 library(calendR)
 
-#chekc if its related to lunar cycles
+# check if its related to lunar cycles
 moon_feb <- calendR(year= 2022,
         month = 2,
         lunar = TRUE,
@@ -1176,7 +1168,8 @@ moonlight_feb <- calculateMoonlightIntensity(commu_feb_dep$location_lat, commu_f
 moonlight_march <- calculateMoonlightIntensity(lat=9.397357, lon=-82.26253, commu_march_dep$minTimeLocal, e)
 
 ```
-# Plot moonline intensity model and departures in february and march 
+
+# Plot moonline intensity model and departures in February and March 
 
 Moonlight intensity depends predominantly on two factors: the amount of light reaching
 the atmosphere and how this light is subsequently refracted and absorbed (Austin et al. 1976; Krisciunas and Schaefer 1991). 
@@ -1210,7 +1203,7 @@ train_sec <- function(primary, secondary, na.rm = TRUE) {
 # apply function to our data in feb 
 secfeb <- with(commu_feb_dep, train_sec(as.numeric(timeSinceSunset), illumination))
 
-#plot for feb
+# plot for feb
 dep_ilu_feb <- ggplot(commu_feb_dep, aes(x=date))+
   geom_point(aes(y=as.numeric(timeSinceSunset)))+
   geom_smooth(aes(y=as.numeric(timeSinceSunset)), method = "gam")+
@@ -1226,8 +1219,6 @@ dep_ilu_feb <- ggplot(commu_feb_dep, aes(x=date))+
   ) + 
    guides(color="none")+
   theme_classic()
-
-
 
 # add columns of illumination and moonphase for feb
 commu_march_dep$illumination <- moonlight_march$moonlightModel
@@ -1253,6 +1244,7 @@ dep_ilu_march <- ggplot(commu_march_dep, aes(x=date))+
    guides(color="none")+
   theme_classic()
 
+# plot february and march together
 dep_ilu_feb+dep_ilu_march +plot_layout(axes = "collect_x")
 
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/deptime_moonlight.pdf", height=5, width = 7)
@@ -1282,7 +1274,7 @@ train_sec <- function(primary, secondary, na.rm = TRUE) {
 # apply function to our data in feb 
 secfeb_moon <- with(commu_feb_dep, train_sec(as.numeric(timeSinceSunset), moonphase))
 
-#plot for feb
+# plot for feb
 dep_moon_feb <- ggplot(commu_feb_dep, aes(x=date))+
   geom_point(aes(y=as.numeric(timeSinceSunset)))+
   geom_smooth(aes(y=as.numeric(timeSinceSunset)), method = "gam")+
@@ -1330,7 +1322,7 @@ ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/deptim
 ### Plot moon intensity vs departures
 
 ```{r}
-#join two data frames to plot departures in both dry periods
+# join two data frames to plot departures in both dry periods
 commu_feb_dep <- commu_feb_dep[order(commu_feb_dep$tag_local_identifier, commu_feb_dep$date),]
 commu_feb_ret <- commu_feb_ret[order(commu_feb_ret$tag_local_identifier, commu_feb_ret$date),]
 
@@ -1340,16 +1332,24 @@ commu_march_dep$year_cave <- "2022_dry-2"
 commu_march_dep$timestamps <- commu_march_dep$departure_start
 commu_march_dep$timestamps_r <- commu_march_dep$return_stop
 
+#join data frame only for February and March
 deps <- rbind(commu_feb_dep[,c("tag_local_identifier","timestamps","timestamps_r","date","timeSinceSunset","illumination", "moonphase", "year_cave")], commu_march_dep[,c("tag_local_identifier","timestamps" ,"timestamps_r","date","timeSinceSunset", "illumination", "moonphase", "year_cave")])
 
 write.csv(deps, file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_febmarch_illumination.csv")
 
+# join data frames for all tracking periods
 deps_all <- rbind(commu_feb_dep[,c("tag_local_identifier","timestamps","date","timeSinceSunset", "year_cave")], commu_march_dep[,c("tag_local_identifier","timestamps" ,"date","timeSinceSunset", "year_cave")], commu_2023_dep[,c("tag_local_identifier","timestamps" ,"date","timeSinceSunset",  "year_cave")])
 
 
 write.csv(deps_all, file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/departures_febmarch_wetseason.csv")
+```
 
-#plot departures vs illumination
+### Plot departures vs illumination
+
+Theere might be some relationship between moon light intesity and departure times. That we will test in script 10.
+
+```{r}
+
 dep_vs_ilu <- ggplot(aes(x=illumination,y=timeSinceSunset), data=deps)+
   geom_point(aes(color=as.factor(year_cave)))+
   geom_smooth(method = "lm")+
@@ -1358,7 +1358,8 @@ dep_vs_ilu <- ggplot(aes(x=illumination,y=timeSinceSunset), data=deps)+
   theme_classic()
 dep_vs_ilu 
 ```
-### Plot 
+
+### Plot in a different way - departures vs illumination
 
 ```{r}
 ilu <- ggplot(aes(x=date,y=illumination), data=deps)+
@@ -1400,81 +1401,4 @@ dep_ilu_all <- ggplot(deps, aes(x=date))+
   xlab("Date")+
   theme_classic()
 dep_ilu_all 
-```
-
-# Test if departure time and moon illumination have a relationship in february data
-
-s(illumination): A smooth term to model the non-linear relationship between moonlight intensity and departure time.
-s(date_f, bs = "re"): Treats date as a random effect using the "re" (random effects) basis, which is appropriate for categorical variables.
-random = list(tag_local_identifier = ~1): Specifies tag_local_identifier as a random intercept to account for repeated measures on individuals.
-```{r}
-library(mgcv)
-deps$date_f <- as.factor(deps$date)
-
-lme_feb_moon <- lmer(log(as.numeric(timeSinceSunset)) ~ illumination + (1|tag_local_identifier), 
-                   data = deps)
-
-summary(lme_feb_moon)
-car::Anova(lme_feb_moon)
-
-##the gam model is not positive
-gamm_feb_moon <- gamm(log(as.numeric(timeSinceSunset)) ~ s(illumination) + s(date_f, bs="re"), random = list(tag_local_identifier = ~1), 
-                   data = deps)
-
-summary(gamm_feb_moon$gam)
-summary(gamm_feb_moon$lme)
-
-par(mfrow = c(2, 2))  # To see multiple plots at once
-plot(gamm_feb_moon$gam)
-
-# check for Autocorrelation in Residuals (since you have repeated measures):
-acf(resid(gamm_feb_moon$lme), main = "ACF of residuals")
-
-# Check Random Effects:
-# random effects to see how much individual variability is being captured.
-ranef(gamm_feb_moon$lme)  # Extract random effects
-
-#The gam.check() function helps identify issues like concurvity (smooth terms that are too closely correlated) and whether more knots might be needed.
-gam.check(gamm_feb_moon$gam)
-
-#You can visualize the fitted smooth terms to see how they capture the relationship between illumination and timeSinceSunset, as well as the effect of date.
-plot(gamm_feb_moon$gam, pages = 1)
-
-#The smooth terms should have confidence intervals (dashed lines) that show where the model has high confidence in the relationship.
-#A wiggly smooth term suggests non-linearity, while a flatter smooth indicates a linear relationship.
-
-# Colliniarity
-concurvity(gamm_feb_moon$gam, full = TRUE) #High concurvity values (close to 1) suggest multicollinearity, which might distort the model.
-```
-# Test if departure time and moon illumination have a relationship in march data
-```{r}
-commu_march_dep$date_f <- as.factor(commu_march_dep$date)
-
-gamm_march_moon <- gamm(as.numeric(timeSinceSunset) ~ s(illumination) + s(date_f, bs="re"), random = list(tag_local_identifier = ~1), 
-                   data = commu_march_dep)
-
-summary(gamm_march_moon$gam)
-summary(gamm_march_moon$lme)
-
-par(mfrow = c(2, 2))  # To see multiple plots at once
-plot(gamm_march_moon$gam)
-
-# check for Autocorrelation in Residuals (since you have repeated measures):
-acf(resid(gamm_march_moon$lme), main = "ACF of residuals")
-
-# Check Random Effects:
-# random effects to see how much individual variability is being captured.
-ranef(gamm_march_moon$lme)  # Extract random effects
-
-#The gam.check() function helps identify issues like concurvity (smooth terms that are too closely correlated) and whether more knots might be needed.
-gam.check(gamm_march_moon$gam)
-
-#You can visualize the fitted smooth terms to see how they capture the relationship between illumination and timeSinceSunset, as well as the effect of date.
-plot(gamm_march_moon$gam, pages = 1)
-
-#The smooth terms should have confidence intervals (dashed lines) that show where the model has high confidence in the relationship.
-#A wiggly smooth term suggests non-linearity, while a flatter smooth indicates a linear relationship.
-
-# Colliniarity
-concurvity(gamm_march_moon$gam, full = TRUE) #High concurvity values (close to 1) suggest multicollinearity, which might distort the model.
 ```

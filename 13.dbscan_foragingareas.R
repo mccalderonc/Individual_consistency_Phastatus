@@ -18,7 +18,7 @@ lapply(foraging_bocasfeb_ls, function(x){
   abline(h = 50, lty = 2)
 })
 
-#set seed
+# set seed
 set.seed(123)
 
 # compute DBSCAN using fpc package
@@ -50,7 +50,7 @@ lapply(1:length(db_feb), function(i){
 })
 dev.off()
 
-#include clustering column to the data frame
+# include clustering column to the data frame
 foraging_bocasfeb_ls <- lapply(1:length(db_feb), function(i){
   idname <- names(db_feb[i])
   foraging_bocasfeb_ls[[idname]]$cluster <- db_feb[[idname]]$cluster
@@ -61,6 +61,7 @@ foraging_bocasfeb_ls <- lapply(1:length(db_feb), function(i){
 names(foraging_bocasfeb_ls) <-  names(db_feb)
 
 mapview::mapView(foraging_bocasfeb_ls[[49]], xcol="location_long", ycol="location_lat", zcol="cluster", legend=F, crs="EPSG:4326")
+
 #check 15
 #check 19
 #check 34
@@ -120,8 +121,7 @@ lapply(1:length(db_march), function(i){
 })
 dev.off()
 
-# plot cluster of dbscan using diffferent function
-library("factoextra")
+# plot cluster of dbscan using different function
 pdf(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/clustering/clusterplot_march.pdf")
 lapply(1:length(db_march), function(i){
   idname <- names(db_march[i])
@@ -182,8 +182,7 @@ lapply(1:length(db_wet), function(i){
 })
 dev.off()
 
-# plot cluster of dbscan using diffferent function
-library("factoextra")
+# plot cluster of dbscan using different function
 pdf(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/clustering/clusterplot_wet.pdf")
 lapply(1:length(db_wet), function(i){
   idname <- names(db_wet[i])
@@ -191,7 +190,7 @@ lapply(1:length(db_wet), function(i){
 })
 dev.off()
 
-#include clustering column to the data frame
+# include clustering column to the data frame
 foraging_bocaswet_ls <- lapply(1:length(db_wet), function(i){
   idname <- names(db_wet[i])
   foraging_bocaswet_ls[[idname]]$cluster <- db_wet[[idname]]$cluster
@@ -205,7 +204,7 @@ names(foraging_bocaswet_ls) <-  names(db_wet)
 
 mapview::mapView(foraging_bocaswet_ls[[19]], xcol="location_long", ycol="location_lat", zcol="cluster", legend=F, crs="EPSG:4326")
 
-#remove cluster which are zero
+# remove cluster which are zero
 foraging_bocaswet_ls <- lapply(foraging_bocaswet_ls, function(x){
   data <-  x[x$cluster!=0,]
   return(data)
@@ -227,16 +226,20 @@ cluster_wet <- do.call(rbind,foraging_bocaswet_ls)
 cluster_all <- rbind(cluster_feb, cluster_march, cluster_wet)
 cluster_all$year_cave_f<- factor(cluster_all$year_cave, levels=c("2022_lagruta_Feb", "2022_ajcave",    "2023_ajcave"), labels=c("dry 2022-1", "dry 2022-2",  "wet 2023"))
 
+write.csv(cluster_all, file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/clusters_all.csv")
+
 summary_clusters <- cluster_all %>%
   group_by(year_cave_f, tag_local_identifier, date)%>%
   dplyr::summarise(mean_cluster=mean(cluster), sd_cluster=sd(cluster))
+
+write.csv(summary_clusters, file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/summary_clusters.csv")
 
 summary_clusters_days <- summary_clusters %>%
   group_by(tag_local_identifier)%>%
   dplyr::summarise(mean_cluster=mean(mean_cluster), count = n())
 
 
-#plot cluster
+# plot cluster
 cluster_plot <- ggplot(aes(x= year_cave_f,y=cluster, fill=year_cave_f), data=cluster_all) +
   geom_boxplot(alpha = 0.5) +
   #geom_point(position = position_jitter(seed = 1, width = 0.2)) +
@@ -260,13 +263,21 @@ cluster_plot
 
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/clustering/foraging_patches_all.pdf")
 
+### Figure of overlap and clusters
+(within_between_all / cluster_plot) + plot_layout(axes = "collect_x") + plot_annotation(tag_levels = "A") &
+  theme(
+    plot.tag = element_text(size = 20)  # Customize tag size and appearance
+  )
+
+ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/overlap_patches.pdf", width = 10, height = 9)
+
 
 cluster_mean <- cluster_all%>%
   group_by(year_cave_f, ID)%>%
   dplyr::summarise(no_cluster=n_distinct(cluster), meanpatches=mean(cluster), sdpatches=sd(cluster))
   
 
-#plot cluster
+# plot cluster
 cluster_id <- ggplot(aes(x=mean_cluster,y=tag_local_identifier, color=year_cave_f), data=summary_clusters) +
   #geom_boxplot(alpha = 0.5) +
   geom_point(aes(alpha=year_cave_f)) +
@@ -288,7 +299,7 @@ cluster_id <- ggplot(aes(x=mean_cluster,y=tag_local_identifier, color=year_cave_
 cluster_id
 
 
-#overlap and foraging patches
+# overlap and foraging patches
 library(patchwork)
 ind_overlap + cluster_id + plot_layout(axes = "collect_y", guides = "collect") +plot_annotation(tag_levels = "A") &theme(legend.position = "bottom", legend.text = element_text(size=14), legend.title = element_text(size = 16), plot.tag = element_text(size = 18))
 
@@ -304,31 +315,32 @@ lapply(split(cluster_all, cluster_all$tag_local_identifier), function(x){
   
 #### Test if the number of foraging patches change between periods
 
-# Fit a Poisson mixed model
+# fit a Poisson mixed model
 model <- glm(no_cluster ~ year_cave_f , 
                data = cluster_mean, 
                family = "poisson")
 
-# Summarize the model
+# summarize the model
 summary(model)
 
 plot(model)
 
-# Calculate residual deviance and degrees of freedom
+# calculate residual deviance and degrees of freedom
 deviance_value <- sum(residuals(model, type = "pearson")^2)
 df_residual <- df.residual(model)
 
-# Dispersion ratio
+# dispersion ratio
 dispersion_ratio <- deviance_value / df_residual
 dispersion_ratio
 
 library(MASS)
 
-# Fit a Negative Binomial mixed model
+# fit a Negative Binomial mixed model
 model_nb <- glmer.nb(no_cluster ~ year_cave_f + (1 | ID), 
                      data = cluster_mean)
 car::Anova(model_nb)
 
 plot(model_nb)
-# Post-hoc pairwise comparisons
+
+# post-hoc pairwise comparisons
 emmeans(model_nb, pairwise ~ year_cave_f)

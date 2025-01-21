@@ -1,19 +1,16 @@
 ---
 title: "Dynamic time warping"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
 date: "2024-03-27"
 Author: Camila
 ---
 
-Euclidean and DTW distances are both classified as shape based. This type takes into account the overall shape and matches time series based on that aspect. It is a whole time series analysis. #good explanation of DTW
-<https://rpubs.com/esobolewska/dtw-time-series>
+In this code, I aim to calculte DTW distance for individuals in the different tracking periods, to see how similar are outbounds and inbounds commutes within and between individuals
 
-The main difference between both distances can be best understood graphically. The picture below shows an example of matched points of two data vectors. They were connected based on the minimal distance between points based on DTW (black) and Euclidean (red) distance. It can be seen that with DTW the 11th blue point matches 4 green points. When taking into account the Euclidean distance it can be seen that the assigned points 9-to-9 and 10-to-10 are visibly further than 9-to-11 and 10-to-11. That can significantly impact the overall distance of series between each other. The DTW takes into account the shape of both time series much better.
-
-Dynamic Time warping is a method of calculating distance that is more accurate than Euclidean distance. It has an advantage over Euclidean if data points are shifted between each other and we want to look rather at its shape. Additionally two time series don’t have to be equal in length what is an assumption required by the Euclidean distance. The Euclidean distance takes pairs of data points and compares them to each other. DTW calculates the smallest distance between all points - this enables a one-to-many match. In literature dynamic time warping is often paired with k-medoids and hierarchical methods. In some papers it is sometimes paired with k-means though this is a controversial matter (Stack Exchange (2015)). Out of non classical methods, it was also paired with random-swap and hybrid(Aghabozorgi, Shirkhorshidi, and Wah (2015)).
+### Load libraries
 
 ```{r setup, warning=FALSE, message=FALSE}
 library(dtw)  # dynamic time warping
@@ -51,14 +48,14 @@ move_path <- move(data=bocas_used,
                   sensor = bocas_used$sensor_type,
                   proj = CRS("+proj=longlat +ellps=WGS84"))
 
-#create a movestack
+# create a movestack
 # add movement parameters, pre-cleaning
 moveList <- lapply(split(move_path), function(myInd){
   myInd$tlag <- c(NA, move::timeLag(myInd, units="secs"))
   return(myInd)
 })
 
-#check time tracked for each id
+# check time tracked for each id
 hourstracked <- lapply(1:length(moveList), function(id){
   #x$tlag[x$tlag>=50000] <- NA
   id <- names(moveList[id])
@@ -74,14 +71,17 @@ hourssume <- hourstracked %>%
   group_by(id)%>%
   dplyr::summarise(sum_hours= sum(h), meanhours= mean(h), count = n())
 
+# convert move object to dataframe
 phas <- moveStack(moveList, forceTz="UTC")
 bocas_used <- as.data.frame(phas) 
 bocas_used$tlag[which(bocas_used$behav=="foraging" & bocas_used$tlag>1800)] <- 190
 
+# sampling effort
 samplingeffort <- bocas_used %>%
   group_by(tag_local_identifier)%>%
   dplyr::summarise(hours=sum(tlag, na.rm = TRUE)/3600)
 
+# split dataframe
 bocas_ls <- split(bocas, bocas$ID)
 
 ```
@@ -230,7 +230,13 @@ hist(data.commu.out$ground_speed)
 ```
 
 
-## Calculating path similarity for each individual
+### Calculating DTW distance (path similarity) for each individual in February - Colony 1 dry-1
+
+Dynamic Time warping is a method of calculating distance that is more accurate than Euclidean distance. It has an advantage over Euclidean if data points are shifted between each other and we want to look rather at its shape. Additionally two time series don’t have to be equal in length what is an assumption required by the Euclidean distance. The Euclidean distance takes pairs of data points and compares them to each other. DTW calculates the smallest distance between all points - this enables a one-to-many match. In literature dynamic time warping is often paired with k-medoids and hierarchical methods. In some papers it is sometimes paired with k-means though this is a controversial matter (Stack Exchange (2015)). Out of non classical methods, it was also paired with random-swap and hybrid(Aghabozorgi, Shirkhorshidi, and Wah (2015)).
+
+Good explanation of DTW compare to Eucliadina distance: <https://rpubs.com/esobolewska/dtw-time-series>
+Example from website:
+The main difference between both distances can be best understood graphically. The picture below shows an example of matched points of two data vectors. They were connected based on the minimal distance between points based on DTW (black) and Euclidean (red) distance. It can be seen that with DTW the 11th blue point matches 4 green points. When taking into account the Euclidean distance it can be seen that the assigned points 9-to-9 and 10-to-10 are visibly further than 9-to-11 and 10-to-11. That can significantly impact the overall distance of series between each other. The DTW takes into account the shape of both time series much better.
 
 ```{r, echo=FALSE}
 # split data by day
@@ -298,16 +304,18 @@ lapply(1:length(feb_id), function(i){
 })
 while (!is.null(dev.list()))  dev.off()
 
-#plot one individual
+# plot one individual
 ggplot(aes(x=location_long, y=location_lat, group = date, color=as.factor(date)), data=feb_id[["2C507735_G"]])+
 geom_path()+
   facet_wrap(.~date)
 ```
 
-## Plot some tracks per individual of group G to see how the similar are in their commutes
+### Plot some tracks per individual to see how the similar are in their commutes
+
+Inbound commutes look more similar to each other than outbound commutes
 
 ```{r}
-#look that there is something going on here
+# look that there is something going on here
 outplots <- data.commu.out %>%
   filter( tag_local_identifier== "2C500235_D"| tag_local_identifier== "2C507735_G" |  tag_local_identifier== "37507537_D"| tag_local_identifier== "39506037_G") %>% #tag_local_identifier== "2D507235_G" | |tag_local_identifier=="2E500235_G"
   ggplot(aes(x=location_long, y=location_lat, col=tag_local_identifier, group=ID))+
@@ -336,13 +344,13 @@ ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/
 
 ```
 
-## Clustering the outbound commutes by ID day for all individuals in February 2022
+### Clustering the outbound commutes by ID day for all individuals in February 2022- Colony 1 dry-1
 
 Here we use dtw to calculate distance dissimilarities between commuting track by individual day. We calculate all the pairwise comparison between individual in the different days.
 Dynamic Time Warping finds the optimal alignment between the two time series by computing the minimal cumulative distance path through this matrix. The resulting alignment stretches or compresses the sequences to match each other as closely as possible, minimizing the total distance (or "warping cost").
 
 
-To qualitatively described the the commuting paths by individual, I used a clustering method from the hclust function. The clustering method was ward.D2 which calculates minimum variance. It aims to find compact and spherical clusters. This cluster seems to capture better the similarity within individuals compare to the complete linkage which find similar clusters. "ward.D2" implements that criterion (Murtagh and Legendre 2014). With ward.D2, the dissimilarities are squared before cluster updating, compare to ward.D.
+To qualitatively described the commuting paths by individual, I used a clustering method from the hclust function. The clustering method was ward.D2 which calculates minimum variance. It aims to find compact and spherical clusters. This cluster seems to capture better the similarity within individuals compare to the complete linkage which find similar clusters. "ward.D2" implements that criterion (Murtagh and Legendre 2014). With ward.D2, the dissimilarities are squared before cluster updating, compare to ward.D.
 
 ```{r}
 # split data by day
@@ -394,18 +402,19 @@ all_results <- all_results[!duplicated(all_results$Distance), ]
 all_results_samedate <- all_results%>%
   filter(sameid=="yes")
 
-#remove individulas with only two days of tracking for the clustering representation
+#remove individuals with only two days of tracking for the clustering representation
 all_results_sub <- all_results %>%
   filter(id1!="53506935" & id1!= "22507B4E" & id1!= "38500437" & id1!="38506D37" & id2!="53506935" & id2!= "22507B4E" & id2!= "38500437" & id2!="38506D37")
 
 all_results_sub$Pair1 <- droplevels(all_results_sub$Pair1)
 all_results_sub$Pair2 <- droplevels(all_results_sub$Pair2)
-
-# quickly plot a cluster for all to visualize
+```
+### Quickly plot a cluster for all to visualize outbound commutes in February 2022
+```{r}
 set.seed(1)
 fit_idday <- hclust(as.dist(xtabs(Distance ~ Pair1 + Pair2, data = all_results_sub)), method = "ward.D2")
 
-# Plot the dendrogram
+# plot the dendrogram
 fviz_dend(fit_idday, k = 15,  color_labels_by_k = TRUE, rect = TRUE,show_labels = TRUE)
 
 ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/cluster_allfeb_idday_ward2_16092024_.pdf", height=20, width =25)
@@ -417,6 +426,8 @@ ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/
 # ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/cluster_allfeb_idday_complete19082024_meters.pdf", height=20, width =25)
 ```
 The previous dendogram color by cluster but it is no able to color by individual day even if it falls in a different cluster. I try to do this here in the next figure, to see better where the individuals fall within all the possible clusters inside the tree.
+
+### Cluster analysis for outbound commutes colored by ID in Colony 1 dry-1
 
 ```{r}
 library(factoextra)
@@ -459,7 +470,7 @@ dev.off()
 
 ```
 
-## CLustering the inbound commutes by ID day in Feburary 2022
+### DTW distance for inbound commutes by ID day in Feburary 2022, Colony 1 dry-1
 
 ```{r}
 # split data by day
@@ -503,8 +514,9 @@ result_dist_feb_in_sub <- result_dist_feb_in %>%
 
 result_dist_feb_in_sub$Pair1 <- droplevels(result_dist_feb_in_sub$Pair1)
 result_dist_feb_in_sub$Pair2 <- droplevels(result_dist_feb_in_sub$Pair2)
-
-# quickly plot a cluster for all to visualize
+```
+### Quickly plot a cluster for all to visualize inbound commute sin February 2022
+```{r}
 set.seed(1)
 fit_idday_in_feb <- hclust(as.dist(xtabs(Distance ~ Pair1 + Pair2, data = result_dist_feb_in_sub)), method = "ward.D2")
 
@@ -519,7 +531,9 @@ ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/
 # 
 # ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/cluster_allfeb_idday_complete19082024_meters.pdf", height=20, width =25)
 ```
-The previous dendogram color by cluster but it is no able to color by individual day even if it falls in a different cluster. I try to do this here in the next figure, to see better where the individuals fall within all the possible clusters inside the tree.
+The previous dendogram of inbound commutes colored by cluster but it is no able to color by individual day even if it falls in a different cluster. I try to do this here in the next figure, to see better where the individuals fall within all the possible clusters inside the tree.
+
+### Cluster analysis for inbound commutes colored by ID in Colony 1 dry-1
 
 ```{r}
 library(factoextra)
@@ -574,10 +588,9 @@ dend_in_feb %>% dendextend::set("labels_cex", 1.2) %>% plot(horiz=TRUE)#xlim=c(0
 colored_bars(cbind(colored_labels2), dend_in_feb, horiz = TRUE, rowLabels = "id", cex.rowLabels=2)
 #legend("topleft", legend = labels2_unique, fill = color_palette[1:length(labels2_unique)], text.font = 2, cex = 2.5)
 dev.off()
-
 ```
 
-### Test if there is more similarities within than between individuals in their paths similarities
+### Test if there are more similarities within than between individuals in their paths similarities
 
 ```{r}
 library(lme4)
@@ -652,10 +665,9 @@ m_dtw_in <- lmer(log(Distance)~sameid + (1|dyad) + (1|date), data = result_dist_
 summary(m_dtw_in)
 car::Anova(m_dtw_in)
 ```
-Here we see that independent of the outbound and inbound commutes, individuals have more similar paths across the days than path between other individuals in the group.
+Here we see that independent of the outbound and inbound commutes, individuals have more similar paths across the days than path between other individuals in the colony 1 dry-1.
 
-Now we are interested in seeing if outbound commutes are similar than inbound commutes within the same individuals, to see if there are some particular routes preferred when bats fly to the foraging areas vs. returning to the roost.
-
+Now we are interested in seeing if outbound commutes are more similar than inbound commutes within the same individuals, to see if there are some particular routes preferred when bats fly to the foraging areas vs. returning to the roost.
 
 
 ### Compare inbound and outbound from the same individual same day in February
@@ -774,26 +786,29 @@ ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/
 
 ```
 
+I did DTW distance and clustering for the individuals in February, and now I will do it for the rest of the individuals in March 2022, colony 2, and the individuals in 2023 colony 2
 
-## Males in aj cave
+### Individuals on March 2022 - Males in Colony 2
+
 ```{r}
+# filter to march data
 march_males <- bats_commu%>%
   filter(date>="2022-03-01" & date<="2022-03-30")
 
+# split data frame
 splitmarch_males <- split(march_males, f=march_males$ID)
 
+# filter individuals with incomplete data
 Commu_march_commales <- splitmarch_males[names(splitmarch_males) %in% c("PH_TS_011_2022-03-08","PH_TS_011_2022-03-12", "PH_TS_011_2022-03-15", "PH_TS_011_2022-03-17", "PH_TS_014_2022-03-07", "PH_TS_014_2022-03-08", "PH_TS_014_2022-03-09", "PH_TS_014_2022-03-10", "PH_TS_016_2022-03-09","PH_TS_016_2022-03-10", "PH_TS_080_2022-03-09", "PH_TS_080_2022-03-10", "PH_TS_080_2022-03-11", "PH_TS_080_2022-03-14", "PH_TS_080_2022-03-15", "PH_TS_080_2022-03-16", "PH_TS_080_2022-03-17", "PH_TS_080_2022-03-18", "PH_TS_080_2022-03-19", "PH_TS_080_2022-03-20", "PH_TS_080_2022-03-21", "PH_TS_100_2022-03-07", "PH_TS_100_2022-03-10", "PH_TS_100_2022-03-11", "PH_TS_100_2022-03-16", "PH_TS_100_2022-03-17", "PH_TS_100_2022-03-18", "PH_TS_112_2022-03-08", "PH_TS_112_2022-03-11", "PH_TS_120_2022-03-08") == TRUE]#remove "PH_TS_120_2022-03-08", "PH_TS_120_2022-03-11"
 
 Commu_march_malesc <- as.data.frame(do.call(rbind, Commu_march_commales))
 
-#plot time vs id to see gaps
+# plot time vs id to see gaps in data
 ggplot(aes(x=location_long, y=location_lat, color=as.factor(date)), data=Commu_march_malesc)+
     geom_point()+
     facet_wrap(.~date)
 
-
 # ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/paths_males_ajcave.pdf", height=20, width =25)
-
 
 # for loop to divide each day of the animal in commuting outbound and commuting inbound using around 30 minutes as a threshold value
 mylist2 <- list() 
@@ -820,6 +835,7 @@ data.march <- data.march %>%
 data.march <- data.march%>%
   filter(name!="PH_TS_016_2022-03-10_1")
 
+# rename some files to make sure classificiation is right
 data.march$name[which(data.march$name=="PH_TS_016_2022-03-10_2")] <- "PH_TS_016_2022-03-10_1"
 data.march$name[which(data.march$name=="PH_TS_016_2022-03-10_3")] <- "PH_TS_016_2022-03-10_2"
 
@@ -828,6 +844,7 @@ commu.march.out <- data.march[grep("_1\\b", data.march$name),]#exact match to av
 commu.march.out <- commu.march.out%>% 
   filter(ID!="PH_TS_011_2022-03-15", ID!="PH_TS_011_2022-03-17", ID!= "PH_TS_079_2022-03-16", ID!= "PH_TS_100_2022-03-17", ID!= "PH_TS_100_2022-03-18",ID!="PH_TS_120_2022-03-11")
 
+# select inbound commutes
 commu.march.in <- data.march[grep("_2\\b", data.march$name),]
 commu.march.in <- commu.march.in %>%
   filter( ID!= "PH_TS_079_2022-03-16", ID!= "PH_TS_080_2022-03-09")
@@ -843,13 +860,13 @@ ggplot(commu.march.in, aes(x=location_long, y=location_lat, group = ID, color=ID
  # facet_wrap(.~ID)
 ```
 
-## DTW similarity of outbound commutes for males in march 
+### DTW similarity of outbound commutes for males in march 2022, Colony 2
 
 ```{r}
 # split dataframe by ID
 commu.march.out.ls <- split(commu.march.out, commu.march.out$ID)
 
-# Create all pairwise combinations of dataframes
+# create all pairwise combinations of dataframes
 pairs_out_march <- expand.grid(names(commu.march.out.ls), names(commu.march.out.ls))
 pairs_out_march <- subset(pairs_out_march, Var1 != Var2)
 
@@ -879,7 +896,7 @@ results_march_out <- results_march_out[!duplicated(results_march_out$Distance), 
 march_out_samedate <- results_march_out%>%
   filter(samedate=="yes")
 
-# quickly plot a cluster for all to visualize
+# quickly plot a cluster for all to visualize, but there is not enough information to see a good pattern
 set.seed(1)
 fit_idday_marchout <- hclust(as.dist(xtabs(Distance ~ Pair1 + Pair2, data = results_march_out)), method = "ward.D2")
 
@@ -888,8 +905,7 @@ fviz_dend(fit_idday_marchout, k = 10,  color_labels_by_k = TRUE, rect = TRUE,sho
 
 ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/cluster_march_out_ward2.pdf", height=35, width =25)
 
-#still test this
-# boxplot of similarities in outbound commutes in march
+# boxplot of similarities in outbound commutes in march within and between individuals
 ggplot(aes(x=sameid, y=Distance), data=results_march_out) +
   geom_jitter(aes(alpha=0.5))+
 stat_summary(fun = mean, color = "red") +
@@ -902,35 +918,8 @@ stat_summary(fun = mean, color = "red") +
   )
 ```
 
-```{r}
-# Example dendrogram data and clustering (you can replace this with your data)
-dend_marchout <- as.dendrogram(fit_idday_marchout) 
 
-# Define a custom color palette or color vector for bars
-color_palette2 <- c("#A6CEE3","#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6")
-
-# match colors with your labels (labels2)
-labels_marchout <- str_sub(fit_idday_marchout$labels, end=-12)
-label_uni_marchout <- unique(labels_marchout)
-label_colors_marchout <- setNames(color_palette2[1:length(label_uni_marchout)], label_uni_marchout)
-colored_labels_march <- label_colors_marchout[labels_marchout]
-
-
-pdf(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/dtw_marchout_ward2.pdf", height=20, width =25)
-par(mar = c(4,1,1,12))
-
-# Plot dendrogram again
-dend_marchout %>% dendextend::set("labels_cex", 1.2) %>% plot(horiz=TRUE)
-
-# Add colored bars
-colored_bars(cbind(colored_labels_march), dend_marchout, horiz = TRUE, rowLabels = "id")
-
-# Add legend for the colors
-legend("topleft", legend = label_uni_marchout, fill = color_palette2[1:length(label_uni_marchout)], text.font = 2, cex = 3)
-dev.off()
-
-```
-## DTW similarity of inbound commutes for males in march 
+### DTW similarity of inbound commutes for males in march 2022 in colony 2
 
 ```{r}
 # split dataframe by ID
@@ -990,36 +979,8 @@ stat_summary(fun = mean, color = "red") +
   )
 ```
 
-```{r}
-# Example dendrogram data and clustering (you can replace this with your data)
-dend_marchin <- as.dendrogram(fit_idday_marchin) 
 
-# Define a custom color palette or color vector for bars
-color_palette3 <- c("#A6CEE3","#1F78B4", "#B2DF8A", "#33A02C", "#FB9A99", "#E31A1C", "#FDBF6F", "#FF7F00", "#CAB2D6")
-
-# match colors with your labels (labels2)
-labels_marchin <- str_sub(fit_idday_marchin$labels, end=-12)
-label_uni_marchin <- unique(labels_marchin)
-label_colors_marchin <- setNames(color_palette2[1:length(label_uni_marchin)], label_uni_marchin)
-colored_labels_marchin <- label_colors_marchin[labels_marchin]
-
-
-pdf(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/dtw_marchin_ward2.pdf", height=20, width =25)
-par(mar = c(4,1,1,12))
-
-# Plot dendrogram again
-dend_marchin %>% set("labels_cex", 1.2) %>% plot(horiz=TRUE)
-
-# Add colored bars
-colored_bars(cbind(colored_labels_marchin), dend_marchin, horiz = TRUE, rowLabels = "id")
-
-# Add legend for the colors
-legend("topleft", legend = label_uni_marchin, fill = color_palette2[1:length(label_uni_marchin)], text.font = 2, cex = 3)
-dev.off()
-```
-
-
-### Compaare inbound and outbound from the same individual same day in March
+### Compare inbound and outbound from the same individual same day in March
 
 ```{r}
 commu.march.out$direc <- "outbound"
@@ -1133,11 +1094,9 @@ ggplot(marchpaths[marchpaths$tag_local_identifier=="PH_TS_016",], aes(x=location
 
 ```
 
+### Filter wet season commuting paths in 2023
 
-
-## Filter wet season commuting paths
-
-Here we filtered wet season commuting paths which are complete in other to calculate DTW path similarities.
+Here I filtered wet season commuting paths which are complete in order to calculate DTW path similarities
 
 ```{r}
 wet_bats <- bocas%>%
@@ -1182,26 +1141,29 @@ data.commu.wet <- data.commu.wet %>%
 # select only outbound commuting
 data.commu.wet.out <- data.commu.wet[grep("_1\\b", data.commu.wet$name),]#exact match to avoid selecting the inbound commuting tracks
 
+# plot outbound commutes to see paths
 ggplot(data.commu.wet.out, aes(x=location_long, y=location_lat, group = ID, color=ID))+
   geom_path()+
   facet_wrap(.~tag_local_identifier)
 
+# select only inbound commuting
 data.commu.wet.in <- data.commu.wet[grep("_2\\b", data.commu.wet$name),]
 data.commu.wet.in <- data.commu.wet.in%>%
   filter()
 
+# plot inbound commutes to see paths
 ggplot(data.commu.wet.in, aes(x=location_long, y=location_lat, group = ID, color=ID))+
   geom_path()+
   facet_wrap(.~tag_local_identifier)
 
-mapview::mapView(data.commu.wet.out, xcol="location_long", ycol="location_lat", zcol="ID", legend=F, crs="EPSG:4326")
-
-
-mapview::mapView(data.commu.wet.in, xcol="location_long", ycol="location_lat", zcol="ID", legend=F, crs="EPSG:4326")
+# mapview::mapView(data.commu.wet.out, xcol="location_long", ycol="location_lat", zcol="ID", legend=F, crs="EPSG:4326")
+# 
+# 
+# mapview::mapView(data.commu.wet.in, xcol="location_long", ycol="location_lat", zcol="ID", legend=F, crs="EPSG:4326")
 
 ```
 
-## DTW for outbound commutes paths in the wet season of 2023
+### DTW for outbound commutes paths in the wet season of 2023
 
 ```{r}
 #split commuting outbound paths
@@ -1265,7 +1227,7 @@ stat_summary(fun = mean, color = "red") +
 
 ```
 
-## DTW for inbound commutes paths in the wet season of 2023
+### DTW for inbound commutes paths in the wet season of 2023
 
 ```{r}
 #split commuting outbound paths
@@ -1432,15 +1394,14 @@ stat_summary(fun = mean, color = "red") +
   )+
   ylab("distance similarity")+
   theme_classic()
-ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/inout_sim_byid_2023.pdf", height=10, width =15)
+# ggsave(file = "~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/inout_sim_byid_2023.pdf", height=10, width =15)
 
+# outbound and dinbound commutes
 ggplot(wetpaths, aes(x=location_long, y=location_lat, color=tag_local_identifier, linetype =direc, sgroup=ID))+
   geom_path()+
   theme_classic() 
-
-
 ```
-### Save all outbound and inbound commutes
+### Save dataframe with all outbound and inbound commutes
 ```{r}
 allpaths <- rbind(febpaths,marchpaths, wetpaths)
 
@@ -1453,7 +1414,7 @@ write.csv(allpaths,file = "/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/P
 allpaths <- read.csv(file = "/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allpairwise_out_inbound_paths.csv")
 ```
 
-### in and outbound comparision in distance across seasons
+### Comparison of out- and inbound distance across all tracking periods
 
 ```{r}
 #install.packages("gghighlight")
@@ -1564,7 +1525,7 @@ tracks
 ```
 
 
-# Does the difference in outbound and inbound commutes is more different than to the distance of both outbound and inbound commutes?
+### Does outbound and inbound commute distances are more different than the distances betweeen outbound-outbound and inbound-inbound commutes?
 ```{r}
 library(lme4)
 distsim_all <- all_results %>%
@@ -1628,12 +1589,12 @@ mean_dist_inout <- inout_all%>%
 ```
 
 
-## Plot similarity within and between individuals of the outbound and inbound commutes
+### Plot similarity within and between individuals of the outbound and inbound commutes
 
 ```{r}
-library(ggh4x)# for dinamic color in facewraps
+library(ggh4x)# for dynamic color in face wraps
 
-# Only colour strips in x-direction
+# only color strips in x-direction
 strip <- strip_themed(background_x = elem_list_rect(fill = c("#756BB1", "#21918c","#F0E442"), alpha=c(0.5)))
 
 # Necessary to put RH% into the facet labels
@@ -1680,7 +1641,7 @@ dtw_seasons / (outin_id + tracks)+ plot_annotation(tag_levels = "A") &
 ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/DTW_joined.pdf", width=12, height = 12)
 ```
 
-### Plot by individual the outbound commutes
+### Plot outbound commutes by individual 
 
 ```{r}
 # plot outbound similarity between and within ids
@@ -1702,6 +1663,7 @@ stat_summary(aes(y = Distance, group = direc), fun = mean,
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
 axis.title.x = element_blank())#annotate("text",x = 30, y = 12, label = "R = 0.22*", size = 4
 
+# plot outbound and commutes by period  
 distsim_all %>% 
   filter(sameid=="no") %>% 
   #filter(id1!="53506935", id1!= "22507B4E", id1!="38500437", id1!="38506D37") %>%
@@ -1721,8 +1683,10 @@ stat_summary(aes(y = Distance, group = direc), fun = mean,
 axis.title.x = element_blank())
 ```
 
-### Test repeatability in outbound commutes within indviduals with normal lmr
+### Calculate repeatability for individuals in February for outbound commutes with Rptr
 ```{r}
+library(rptR)
+
 outbound <- distsim_all %>%
   filter(direc=="outbound", sameid=="yes", year_cave=="dry 2022-1")%>%
   mutate(date=paste(date1, date2, sep="_"))
@@ -1744,119 +1708,6 @@ sum(is.na(outbound$id1))
 # Convert id1 to factor if necessary
 outbound$id1 <- as.factor(outbound$id1)
 
-library(lme4)
-# Remove rows where the character in the 'character' column appears only once
-outbound_df <- outbound %>%
-  group_by(date) %>%
-  filter(n() > 1) %>%
-  ungroup()
-
-
-### only for outbound commute
-# out_season <- lmer(log(Distance) ~ cave + day_year1+day_year2 + (1|id1) +(1|day_year1/cave)++(1|day_year2/cave), data = outbound)
-
-
-out_season <- lmer(log(Distance) ~ time_diff +(1|id1) , data = outbound)
-
-summary(out_season)
-car::Anova(out_season)
-plot(out_season)
-qqnorm(residuals(out_season))
-
-library(DHARMa)
-simulationOutput <- simulateResiduals(fittedModel = out_season, plot = F)
-plot(simulationOutput)
-
-library(MuMIn)
-r.squaredGLMM(out_season)
-#Rm= This means that % of the variance is explained by the fixed effects
-#Rc=This means that 7% of the variance is explained by both fixed and random effects
-
-#calculate repeatability 
-#The repeatability value ranges between 0 and 1 and indicates the proportion of variance explained by a given
-#random eﬀect, after controlling the model for the fixed eﬀects of time and cave
-print(VarCorr(out_season),comp = c("Variance","Std.Dev."))
-# individual repeatability
-0.087966/ 0.214213
-0.10199/0.18372
-
-set.seed(1)
-library(arm)
-simulated <- sim(out_season, n.sim = 1000)
-posterior_animal_id <- apply(simulated@ranef$"id1"[ , , 1],1,var)
-
-#posterior_cave <- apply(simulated@ranef$"year_cave"[ , , 1],1,var)
-
-posterior_residual <- simulated@sigma^2
-
-quantile(posterior_animal_id/(posterior_residual),prob=c(0.025, 0.5, 0.975))
-#Alternatively to repeatability we can also calculate the coeﬃcient of variation for between individual variance(CVi)
-CVi <- sqrt(posterior_animal_id) / summary(out_season)$coefficients[1]
-quantile(CVi,prob=c(0.025, 0.5, 0.975))
-
-library(merTools)
-randomSims <- REsim(out_season, n.sims = 1000)
-head(randomSims[randomSims$groupFctr=="id1",])
-#add cave to the individuals
-
-randomSims <- merge(randomSims[randomSims$groupFctr=="id1",],
-outbound[!duplicated(outbound$id1),c("id1","year_cave")],
-by.x = "groupID",by.y="id1")
-
-#add mean by cave
-randomSims[randomSims$year_cave== "dry 2022-1",]$mean <- randomSims[randomSims$year_cave== "dry 2022-1",]$mean +
-fixef(out_season)["(Intercept)"]
-randomSims[randomSims$year_cave== "dry 2022-2",]$mean <- randomSims[randomSims$year_cave== "dry 2022-2",]$mean +
-(fixef(out_season)["(Intercept)"] + fixef(out_season)["year_cavedry 2022-2"])
-randomSims[randomSims$year_cave== "wet 2023",]$mean <- randomSims[randomSims$year_cave== "wet 2023",]$mean +
-(fixef(out_season)["(Intercept)"] + fixef(out_season)["year_cavewet 2023"])
-
-# sort data
-randomSims$groupID <- factor(randomSims$groupID,
-levels = randomSims$groupID[order(randomSims$mean)])
-
-ggplot()+
-geom_errorbar(data = randomSims,
-aes(x = groupID, ymin = exp(mean-sd)/1000,
-ymax = exp(mean+sd)/1000, ))+
-geom_point(data = randomSims,
-aes(x = groupID, y = exp(mean)/1000), shape = 21, size = 2)+#, fill = year_cave
-theme_classic()+
-ylab("DTW similarity (km)")+
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-axis.title.x = element_blank())
-
-ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/indvar_dtw_out.pdf", width=12, height = 7)
-```
-
-### plot individuals with high and low repeatability
-```{r}
-p_high_variation <- febpaths %>%
-  filter(tag_local_identifier=="2C500235_D" | tag_local_identifier=="37507537_D" | tag_local_identifier=="38506737_G",  direc=="outbound") %>%#"38506737_G"
-  ggplot(aes(x=location_long, y=location_lat, color=tag_local_identifier, linetype =direc, sgroup=ID))+
-  #scale_color_manual(values =c("#0072B2","#D55E00"))+
-  geom_path()+
-  xlab("Longitude")+
-  ylab("Latitude")+
-  theme_classic()+
-  theme(axis.title = element_text(face = 'bold', size=20), axis.title.x = element_text(size = 20), axis.title.y=element_text(size=20), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14))
-
-p_low_variation <- febpaths %>%
-  filter(tag_local_identifier=="23506B4E_G"| tag_local_identifier=="2C507735_G",  direc=="outbound") %>%
-  ggplot(aes(x=location_long, y=location_lat, color=tag_local_identifier, linetype =direc, sgroup=ID))+
-  #scale_color_manual(values =c("#0072B2","#D55E00"))+
-  geom_path()+
-  xlab("Longitude")+
-  ylab("Latitude")+
-  theme_classic()+
-  theme(axis.title = element_text(face = 'bold', size=20), axis.title.x = element_text(size = 20), axis.title.y=element_text(size=20), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14))
-
-p_high_variation + p_low_variation 
-```
-
-### Calculate repeatability for outbound commutes with Rptr
-```{r}
-library(rptR)
 ###Repeatability of the model
 #split by cave and calculate repeatability by population
 out_rep<- rpt(log(Distance)~time_diff + (1|id1), grname = c("id1","Residual","Fixed"), 
@@ -1919,13 +1770,13 @@ mean(intraindividual_repeatability$R_ind, na.rm=TRUE)
 sd(intraindividual_repeatability$R_ind, na.rm=TRUE)
 ```
 
-Interindividual variance  is estimated from the variance of the random effects for id1.
+Interindividual variance is estimated from the variance of the random effects for id1.
 Within-individual variance is estimated from the variance of the residuals of the model.
 Intraindividual variance is calculated as the variance of residuals for each individual.
 Population-level repeatability and individual-level repeatability are calculated using these estimates
 
 
-### Test repeatability in inbound commutes within and between individuals with lme
+### Repeatability of the inbound commutes of February 2022 with Rpt
 
 ```{r}
 inbound <- distsim_all %>%
@@ -1948,103 +1799,6 @@ sum(is.na(inbound$id1))
 # Convert id1 to factor if necessary
 inbound$id1 <- as.factor(inbound$id1)
 
-### only for outbound commute
-# out_season <- lmer(log(Distance) ~ cave + day_year1+day_year2 + (1|id1) +(1|day_year1/cave)++(1|day_year2/cave), data = outbound)
-in_season <- lmer(log(Distance) ~  time_diff +(1|id1), data = inbound)
-
-summary(in_season)
-plot(in_season)
-qqnorm(residuals(in_season))
-car::Anova(in_season)
-
-acf(residuals(in_season), main = "ACF of Residuals (With no Autocorrelation)")
-
-simulationOutput <- simulateResiduals(fittedModel = in_season, plot = F)
-plot(simulationOutput)
-library(MuMIn)
-r.squaredGLMM(in_season)
-#Rm= This means that % of the variance is explained by the fixed effects
-#Rc=This means that 7% of the variance is explained by both fixed and random effects
-
-#calculate repeatability 
-#The repeatability value ranges between 0 and 1 and indicates the proportion of variance explained by a given
-#random eﬀect, after controlling the model for the fixed eﬀects of month and sex in our case
-print(VarCorr(in_season),comp = c("Variance","Std.Dev."))
-# individual repeatability
-0.094215/0.115265
-
-set.seed(1)
-library(arm)
-
-simulated <- sim(in_season, n.sim = 1000)
-posterior_animal_id <- apply(simulated@ranef$"id1"[ , , 1],1,var)
-#posterior_animal_id_year <- apply(simulated@ranef$"year_cave:id1"[ , , 1],1,var)
-posterior_residual <- simulated@sigma^2
-
-quantile(posterior_animal_id/c(posterior_residual),prob=c(0.025, 0.5, 0.975), na.rm=TRUE)
-#Alternatively to repeatability we can also calculate the coeﬃcient of variation for between individual variance(CVi)
-CVi <- sqrt(posterior_animal_id) / summary(in_season)$coefficients[1]
-quantile(CVi,prob=c(0.025, 0.5, 0.975))
-
-library(merTools)
-randomSims <- REsim(in_season, n.sims = 1000)
-head(randomSims[randomSims$groupFctr=="id1",])
-#add cave to the individuals
-randomSims <- merge(randomSims[randomSims$groupFctr=="id1",],
-inbound[!duplicated(inbound$id1),c("id1","year_cave")],
-by.x = "groupID",by.y="id1")
-
-#add mean by cave
-randomSims[randomSims$year_cave== "dry 2022-1",]$mean <- randomSims[randomSims$year_cave== "dry 2022-1",]$mean +
-fixef(in_season)["(Intercept)"]
-randomSims[randomSims$year_cave== "dry 2022-2",]$mean <- randomSims[randomSims$year_cave== "dry 2022-2",]$mean +
-(fixef(in_season)["(Intercept)"] + fixef(in_season)["year_cavedry 2022-2"])
-randomSims[randomSims$year_cave== "wet 2023",]$mean <- randomSims[randomSims$year_cave== "wet 2023",]$mean +
-(fixef(in_season)["(Intercept)"] + fixef(in_season)["year_cavewet 2023"])
-
-# sort data
-randomSims$groupID <- factor(randomSims$groupID,
-levels = randomSims$groupID[order(randomSims$mean)])
-
-ggplot()+
-geom_errorbar(data = randomSims,
-aes(x = groupID, ymin = exp(mean-sd)/1000,
-ymax = exp(mean+sd)/1000, ))+
-geom_point(data = randomSims,
-aes(x = groupID, y = exp(mean)/1000), shape = 21, size = 2)+#fill = year_cave
-theme_classic()+
-ylab("DTW similarity (km)")+
-  theme(axis.text.x = element_text(angle = 45, hjust = 1),
-axis.title.x = element_blank())
-
-ggsave(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/results/dtw/indvar_dtw_in.pdf", width=12, height = 7)
-
-in_high_variation <- febpaths %>%
-  filter(tag_local_identifier=="37506237_D" | tag_local_identifier=="38506737_G",  direc=="inbound") %>%
-  ggplot(aes(x=location_long, y=location_lat, color=tag_local_identifier, linetype =direc, sgroup=ID))+
-  #scale_color_manual(values =c("#0072B2","#D55E00"))+
-  geom_path()+
-  xlab("Longitude")+
-  ylab("Latitude")+
-  theme_classic()+
-  theme(axis.title = element_text(face = 'bold', size=20), axis.title.x = element_text(size = 20), axis.title.y=element_text(size=20), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14))
-
-in_low_variation <- febpaths %>%
-  filter(tag_local_identifier=="23506B4E_G"| tag_local_identifier=="2E500235_G",  direc=="inbound") %>%
-  ggplot(aes(x=location_long, y=location_lat, color=tag_local_identifier, linetype =direc, sgroup=ID))+
-  #scale_color_manual(values =c("#0072B2","#D55E00"))+
-  geom_path()+
-  xlab("Longitude")+
-  ylab("Latitude")+
-  theme_classic()+
-  theme(axis.title = element_text(face = 'bold', size=20), axis.title.x = element_text(size = 20), axis.title.y=element_text(size=20), axis.text.y = element_text(size=14), axis.text.x = element_text(size=14))
-
-in_high_variation + in_low_variation 
-```
-
-### Repeatability of the inbound commutes with Rpt
-
-```{r}
 in_rep<- rpt(log(Distance)~ time_diff + (1|id1), grname = c("id1","Residual","Fixed"), 
     data = inbound, datatype = "Gaussian", nboot = 1000, npermut = 0, ratio = FALSE, adjusted = FALSE)
 
@@ -2080,7 +1834,7 @@ mean(intraindividual_repeatability$R_ind, na.rm=TRUE)
 sd(intraindividual_repeatability$R_ind, na.rm=TRUE)
 ```
 
-### Test how inbound and outbound commute changes between periods based on sameid
+### Test how inbound and outbound commutes changes between tracking periods based on sameid
 
 ```{r}
 # out_all <- distsim_all %>%
@@ -2158,401 +1912,6 @@ meandirec <- distsim_all%>%
 # plot(simulationOutput)
 # 
 # AIC(m_in_bp, m_in_bp_rs)
-
-
-```
-
-
-
-### Difference in pairwise wind speed and pairwise DTW within individuals
-
-```{r}
-# read wind data
-windall_df <- read.csv(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/allpaths_winddata.csv")
-distsim_all <- read.csv(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/distsimtable_commutes.csv")
-
-
-windall_df$wind_dire_rad <- windall_df$wind_dire*(pi/180)
-# calculate mean by ids
-meanwind_id <- windall_df %>%
-  mutate(date=date(timestamp))%>%
-  group_by(ID, tag.local.identifier, date, direc)%>%
-  dplyr::summarise(meanwind=mean(wind.speed),varwind=var(wind.speed), meanwd=mean(wind_dire_rad),varwd=var(wind_dire_rad))
-
-
-meanwind_id_ls <- split(meanwind_id, meanwind_id$direc)
-
-# Create all pairwise combinations of dataframes for INBOUND commutes
-pairs_windin<- expand.grid(meanwind_id_ls[[1]]$ID, meanwind_id_ls[[1]]$ID)
-pairs_windin <- subset(pairs_windin, Var1 != Var2)
-
-# Rename columns in pairs_windout for clarity
-names(pairs_windin) <- c("Pair1", "Pair2")
-
-# Merge pairs_windout with the original data twice, for ID1 and ID2
-pairs_windin <- merge(pairs_windin, meanwind_id_ls[[1]], by.x = "Pair1", by.y = "ID", suffixes = c("_Pair1", ""))
-pairs_windin <- merge(pairs_windin, meanwind_id_ls[[1]], by.x = "Pair2", by.y = "ID", suffixes = c("_Pair1", "_Pair2"))
-
-# Calculate the absolute difference in meanwind for each pair
-pairs_windin$windspDf <- abs(pairs_windin$meanwind_Pair1 - pairs_windin$meanwind_Pair2)
-pairs_windin$windspVar <- abs(pairs_windin$varwind_Pair1 - pairs_windin$varwind_Pair2)
-pairs_windin$meanwd <- abs(pairs_windin$meanwd_Pair1 - pairs_windin$meanwd_Pair2)
-pairs_windin$varwd <- abs(pairs_windin$varwd_Pair1 - pairs_windin$varwd_Pair2)
-
-colnames(pairs_windin)[5] <- "direc"
-
-
-# Create all pairwise combinations of dataframes for OUTBOUND commutes
-pairs_windout<- expand.grid(meanwind_id_ls[[2]]$ID, meanwind_id_ls[[2]]$ID)
-pairs_windout <- subset(pairs_windout, Var1 != Var2)
-
-# Rename columns in pairs_windout for clarity
-names(pairs_windout) <- c("Pair1", "Pair2")
-
-# Merge pairs_windout with the original data twice, for ID1 and ID2
-pairs_windout <- merge(pairs_windout, meanwind_id_ls[[2]], by.x = "Pair1", by.y = "ID", suffixes = c("_Pair1", ""))
-pairs_windout <- merge(pairs_windout, meanwind_id_ls[[2]], by.x = "Pair2", by.y = "ID", suffixes = c("_Pair1", "_Pair2"))
-
-# Calculate the absolute difference in meanwind for each pair
-pairs_windout$windspDf <- abs(pairs_windout$meanwind_Pair1 - pairs_windout$meanwind_Pair2)
-pairs_windout$windspVar <- abs(pairs_windout$varwind_Pair1 - pairs_windout$varwind_Pair2)
-pairs_windout$meanwd <- abs(pairs_windout$meanwd_Pair1 - pairs_windout$meanwd_Pair2)
-pairs_windout$varwd <- abs(pairs_windout$varwd_Pair1 - pairs_windout$varwd_Pair2)
-colnames(pairs_windout)[5] <- "direc"
-
-# Merge the two data frames
-pairs_wind <- rbind(pairs_windout,pairs_windin)
-
-# Merge distsim_all with pairs_wind on Pair1 and Pair2
-distsim_all <- merge(distsim_all, pairs_wind[, c("Pair1", "Pair2","direc", "windspDf", "windspVar", "meanwd","varwd")], 
-                     by = c("Pair1", "Pair2", "direc"), all.x = TRUE)
-
-
-### calculate crosswind and windsupport
-meanws <- windall_df %>%
-    mutate(date=date(timestamp))%>%
-    filter(date<"2022-02-28")%>%
-    group_by(direc)%>%
-    dplyr::summarise(meancw=mean(cw, na.rm=TRUE), meanws=mean(ws, na.rm=TRUE), sdws=sd(ws, na.rm=TRUE), varcw=var(cw, na.rm=TRUE), varws=var(ws, na.rm=TRUE))
-
-# calculate mean crosswind by ids
-meancw_ws <- windall_df %>%
-  mutate(date=date(timestamp))%>%
-  group_by(ID, tag.local.identifier, date, direc)%>%
-  dplyr::summarise(meancw=mean(cw), meanws=mean(ws), varcw=var(cw), varws=var(ws))%>%
-  filter(date<"2022-02-28")
-
-
-meancw_ws_id_ls <- split(meancw_ws, meancw_ws$direc)
-
-# Create all pairwise combinations of dataframes for INBOUND commutes
-pairs_cwws_in<- expand.grid(meancw_ws_id_ls[[1]]$ID, meancw_ws_id_ls[[1]]$ID)
-pairs_cwws_in <- subset(pairs_cwws_in, Var1 != Var2)
-
-# Rename columns in pairs_windout for clarity
-names(pairs_cwws_in) <- c("Pair1", "Pair2")
-
-# Merge pairs_windout with the original data twice, for ID1 and ID2
-pairs_cwws_in <- merge(pairs_cwws_in, meancw_ws_id_ls[[1]], by.x = "Pair1", by.y = "ID", suffixes = c("_Pair1", ""))
-pairs_cwws_in <- merge(pairs_cwws_in, meancw_ws_id_ls[[1]], by.x = "Pair2", by.y = "ID", suffixes = c("_Pair1", "_Pair2"))
-
-# Calculate the absolute difference in meanwind for each pair
-pairs_cwws_in$difCW <- abs(pairs_cwws_in$meancw_Pair1 - pairs_cwws_in$meancw_Pair2)
-pairs_cwws_in$difWS <- abs(pairs_cwws_in$meanws_Pair1 - pairs_cwws_in$meanws_Pair2)
-pairs_cwws_in$varCW <- abs(pairs_cwws_in$varcw_Pair1 - pairs_cwws_in$varcw_Pair2)
-pairs_cwws_in$varWS <- abs(pairs_cwws_in$varws_Pair1 - pairs_cwws_in$varws_Pair2)
-colnames(pairs_cwws_in)[5] <- "direc"
-
-
-# Create all pairwise combinations of dataframes for OUTBOUND commutes
-pairs_cwws_out<- expand.grid(meancw_ws_id_ls[[2]]$ID, meancw_ws_id_ls[[2]]$ID)
-pairs_cwws_out <- subset(pairs_cwws_out, Var1 != Var2)
-
-# Rename columns in pairs_windout for clarity
-names(pairs_cwws_out) <- c("Pair1", "Pair2")
-
-# Merge pairs_windout with the original data twice, for ID1 and ID2
-pairs_cwws_out <- merge(pairs_cwws_out, meancw_ws_id_ls[[2]], by.x = "Pair1", by.y = "ID", suffixes = c("_Pair1", ""))
-pairs_cwws_out <- merge(pairs_cwws_out, meancw_ws_id_ls[[2]], by.x = "Pair2", by.y = "ID", suffixes = c("_Pair1", "_Pair2"))
-
-# Calculate the absolute difference in meanwind for each pair
-pairs_cwws_out$difCW <- abs(pairs_cwws_out$meancw_Pair1 - pairs_cwws_out$meancw_Pair2)
-pairs_cwws_out$difWS <- abs(pairs_cwws_out$meanws_Pair1 - pairs_cwws_out$meanws_Pair2)
-pairs_cwws_out$varCW <- abs(pairs_cwws_out$varcw_Pair1 - pairs_cwws_out$varcw_Pair2)
-pairs_cwws_out$varWS <- abs(pairs_cwws_out$varws_Pair1 - pairs_cwws_out$varws_Pair2)
-colnames(pairs_cwws_out)[5] <- "direc"
-
-# Merge the two data frames
-pairs_cwws_inout <- rbind(pairs_cwws_out,pairs_cwws_in)
-
-# Merge distsim_all with pairs_wind on Pair1 and Pair2
-distsim_all <- merge(distsim_all, pairs_cwws_inout[, c("Pair1", "Pair2","direc", "difCW","difWS", "varCW","varWS")], 
-                     by = c("Pair1", "Pair2", "direc"), all.x = TRUE)
-
-
-distsim_all_sameid <- distsim_all %>%
-  filter(sameid=="yes")
- 
-# Plot mean wind speed
-winddif_dist <- ggplot(aes(x=windspDf, y=log(Distance)),data=distsim_all_sameid)+
-  geom_point()+
-  theme_classic()+
-  ylab("Pairwise distance within \n individual commutes")+
-  xlab("Mean wind speed \n difference (m/s)")+
- theme(legend.position = "none", 
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 18),
-        axis.title.y = element_text(size = 18), 
-        plot.title= element_text(size = 20))+
-  facet_wrap(.~direc)+
-  geom_smooth(method="lm")
-
-winddif_var <- ggplot(aes(x=windspVar, y=log(Distance)),data=distsim_all_sameid)+
-  geom_point()+
-  theme_classic()+
-  ylab("Pairwise DTW distance of \n commutes within ids")+
-  xlab("Wind speed variance \n difference (m/s)")+
-  theme(legend.position = "none", 
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 18),
-        axis.title.y = element_text(size = 18), 
-        plot.title= element_text(size = 20))+
-  facet_wrap(.~direc)+
-  geom_smooth(method="lm")
-
-### wind direction
-# winddirec_mean <- ggplot(aes(x=meanwd, y=log(Distance)),data=distsim_all_sameid)+
-#   geom_point()+
-#   theme_classic()+
-#   ylab("Pairwise DTW distance of \n commutes within ids")+
-#   xlab("Mean wind direction \n difference (rad)")+
-#   theme(axis.title = element_text(face = 'bold', size=20), 
-#         axis.title.x = element_text(size = 24), 
-#         axis.title.y=element_text(size=24), 
-#         axis.text.y = element_text(size=20), 
-#         axis.text.x = element_text(size=20),
-#         legend.title =element_text(size=20),
-#         legend.text = element_text(size=18)
-#         )+
-#   facet_wrap(.~direc)+
-#   geom_smooth(method="lm", color="black")
-# 
-# winddirec_var <- ggplot(aes(x=varwd, y=log(Distance)),data=distsim_all_sameid)+
-#   geom_point()+
-#   theme_classic()+
-#   ylab("Pairwise DTW distance of \n commutes within ids")+
-#   xlab("Variance wind direction \n difference (rad)")+
-#   theme(axis.title = element_text(face = 'bold', size=20), 
-#         axis.title.x = element_text(size = 24), 
-#         axis.title.y=element_text(size=24), 
-#         axis.text.y = element_text(size=20), 
-#         axis.text.x = element_text(size=20),
-#         legend.title =element_text(size=20),
-#         legend.text = element_text(size=18)
-#         )+
-#   facet_wrap(.~direc)+
-#   geom_smooth(method="lm", color="black")
-
-# Plot cross wind
-cwdiff_dist <-ggplot(aes(x=difCW, y=log(Distance)),data=distsim_all_sameid)+
-  geom_point()+
-  theme_classic()+
-  ylab("Pairwise DTW distance of \n commutes within ids")+
-  xlab("Mean crosswind \n difference (m/s)")+
- theme(legend.position = "none", 
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 18),
-        axis.title.y = element_text(size = 18), 
-        plot.title= element_text(size = 20))+
-  facet_wrap(.~direc)+
-  geom_smooth(method="lm")
-
-
-cwvar_dist <-ggplot(aes(x=varCW, y=log(Distance)),data=distsim_all_sameid)+
-  geom_point()+
-  theme_classic()+
-  ylab("Pairwise DTW distance of \n commutes within ids")+
-  xlab("Crosswind variance \n difference (m/s)")+
- theme(legend.position = "none", 
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 18),
-        axis.title.y = element_text(size = 18), 
-        plot.title= element_text(size = 20))+
-  facet_wrap(.~direc)+
-  geom_smooth(method="lm")
-
-
-# Plot wind support
-wsdiff_dist <- ggplot(aes(x=difWS, y=log(Distance)),data=distsim_all_sameid)+
-  geom_point()+
-  theme_classic()+
-  ylab("Pairwise DTW distance of \n commutes within ids")+
-  xlab("Mean wind support \n difference (m/s)")+
-  theme(legend.position = "none", 
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 18),
-        axis.title.y = element_text(size = 18), 
-        plot.title= element_text(size = 20))+
-  facet_wrap(.~direc)+
-  geom_smooth(method="lm")
-  
-
-wsvar_dist <-ggplot(aes(x=varWS, y=log(Distance)),data=distsim_all_sameid)+
-  geom_point()+
-  theme_classic()+
-  ylab("Pairwise DTW distance of \n commutes within ids")+
-  xlab("Wind support variance \n difference (m/s)")+
-  theme(legend.position = "none", 
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 18),
-        axis.title.y = element_text(size = 18), 
-        plot.title= element_text(size = 20))+
-  facet_wrap(.~direc)+
-  geom_smooth(method="lm")
-
-library(patchwork)
-winddif_dist 
-
-# mean plot wind variables
-wsdiff_dist / cwvar_dist + plot_layout(axes="collect_y") + plot_annotation(tag_levels = "A")
-
-ggsave(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/MeanVar_WS_CW_DTW.pdf", width=7, height=7)
-
-#variance plot mean variable
-wsvar_dist/cwvar_dist  + plot_layout(axes="collect_y")
-
-ggsave(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/Var_WS_CW_DTW.pdf", width=7, height=12)
-
-# variance in crosswind can have an affect on both if they change more shape on the inbound commutes when they cross the ocean
-
-
-(wsdiff_dist + cwvar_dist)/ combined_plot 
-
-```
-
-### Test that pairwise distance have no relationship with wind
-```{r}
-#Test with a linear regression
-
-cor_matrix <- cor(distsim_all_sameid[, c("windspDf", "difCW", "difWS", "windspVar", "varCW", "varWS")], use = "complete.obs")
-print(cor_matrix)
-
-
-names(distsim_all_sameid)
-### Check this better
-model_path_wsp_mean <- lmer(log(Distance)~windspDf +difCW +direc + (1|dyad), data=distsim_all_sameid)
-
-summary(model_path_wsp_mean)
-car::Anova(model_path_wsp_mean)
-plot(model_path_wsp_mean)
-
-model_path_ws <- lmer(log(Distance)~difCW + difWS+direc + (1|dyad), data=distsim_all_sameid)
-
-summary(model_path_ws)
-car::Anova(model_path_ws)
-plot(model_path_ws)
-
-# Calculate marginal means for 'direc'
-em_direc <- emmeans(model_path_ws, ~ direc)
-pairwise_em_direc <- pairs(em_direc)
-
-model_path_ws_var <- lmer(log(Distance)~ windspVar+varCW+varWS+direc+ (1|dyad), data=distsim_all_sameid)
-
-summary(model_path_ws_var)
-car::Anova(model_path_ws_var)
-plot(model_path_ws_var)  
-
-
-AIC(model_path_wsp_mean,model_path_ws,model_path_ws_var)
-
-```
-### Figure of distnac evs wind with predicted values of the model
-```{r}
-# Generate prediction data
-new_data <- expand.grid(
-  difWS = seq(min(distsim_all_sameid$difWS, na.rm=TRUE), max(distsim_all_sameid$difWS, na.rm=TRUE), length.out = 100),
-  difCW = mean(distsim_all_sameid$difCW, na.rm=TRUE),  # Hold difWS constant
-  direc = unique(distsim_all_sameid$direc)  # Include both "outbound" and "inbound"
-)
-
-new_data$predicted_log_distance <- predict(model_path_ws, newdata = new_data, re.form = NA)
-new_data$predicted_se <- predict(model_path_ws, newdata = new_data, re.form = NA, se.fit = TRUE)$se.fit
-new_data$lower <- new_data$predicted_log_distance - 1.96 * new_data$predicted_se
-new_data$upper <- new_data$predicted_log_distance + 1.96 * new_data$predicted_se
-
-
-# Plot predictions
-# Add observed values of log(Distance)
-distsim_all_sameid$log_distance <- log(distsim_all_sameid$Distance)
-#distsim_all_sameid$direc_f <- factor(distsim_all_sameid$direc, levels = c("outbound","inbound"))
-
-# Plot predictions with confidence intervals and observed data
-ws_dist <- ggplot() +
-  geom_ribbon(data = new_data, aes(x = difWS, ymin = lower, ymax = upper), alpha = 0.2) +
-  geom_line(data = new_data, aes(x = difWS, y = predicted_log_distance), color="#619CFF", size = 1) +
-  geom_point(data = distsim_all_sameid, aes(x = difWS, y = log_distance), alpha = 0.6) +
-  scale_y_continuous(breaks = c(9, 10, 11), labels = c("8100", "22000", "59800"))+
-  labs(
-    x = "Mean wind support (m/s)",
-    y = "Predicted log pairwise DTW distance of \n commutes within ids "
-  ) +
-  guides(fill="none", color="none")+
-  theme(legend.position = "none", 
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 18),
-        axis.title.y = element_text(size = 18), 
-        plot.title= element_text(size = 20))+
-  theme_classic()+
-  facet_wrap(.~direc,scales = "free")
-
-#### Calculate the predicted values for cross wind
-# Generate prediction data
-new_data_2 <- expand.grid(
-  varCW = seq(min(distsim_all_sameid$varCW, na.rm=TRUE), max(distsim_all_sameid$varCW, na.rm=TRUE), length.out = 100),
-  varWS = mean(distsim_all_sameid$varWS, na.rm=TRUE),
-  windspVar = mean(distsim_all_sameid$windspVar, na.rm=TRUE),# Hold difWS constant
-  direc = unique(distsim_all_sameid$direc)  # Include both "outbound" and "inbound"
-)
-
-new_data_2$predicted_log_distance <- predict(model_path_ws_var, newdata = new_data_2, re.form = NA)
-new_data_2$predicted_se <- predict(model_path_ws_var, newdata = new_data_2, re.form = NA, se.fit = TRUE)$se.fit
-new_data_2$lower <- new_data_2$predicted_log_distance - 1.96 * new_data_2$predicted_se
-new_data_2$upper <- new_data_2$predicted_log_distance + 1.96 * new_data_2$predicted_se
-
-# Add observed values of log(Distance)
-distsim_all_sameid$log_distance_2 <- log(distsim_all_sameid$Distance)
-
-# Plot predictions with confidence intervals and observed data
-cw_dist <- ggplot() +
-  geom_ribbon(data = new_data_2, aes(x = varCW, ymin = lower, ymax = upper), alpha = 0.2) +
-  geom_line(data = new_data_2, aes(x = varCW, y = predicted_log_distance), color="#619CFF", size = 1) +
-  geom_point(data = distsim_all_sameid, aes(x = varCW, y = log_distance_2), alpha = 0.6) +
-  scale_y_continuous(breaks = c(9, 10, 11), labels = c("8100", "22000", "59800"))+
-  labs(
-    x = "Crosswind variance \n difference (m/s)",
-    y = "Predicted log pairwise DTW distance of \n commutes within ids "
-  ) +
-  guides(fill="none", color="none")+
-  theme(legend.position = "none", 
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
-        axis.title.x = element_text(size = 18),
-        axis.title.y = element_text(size = 18), 
-        plot.title= element_text(size = 20))+
-  theme_classic()+
-  facet_wrap(.~direc,scales = "free")
-
-# mean plot wind variables
-ws_dist / cw_dist + plot_layout(axes="collect_y") + plot_annotation(tag_levels = "A")
-
-ggsave(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/Fig2.pdf", width=8, height=7)
 
 ```
 

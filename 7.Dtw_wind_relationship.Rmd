@@ -24,23 +24,23 @@ distsim_all <- read.csv(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/d
 #convert to radians
 windall_df$wind_dire_rad <- windall_df$wind_dire*(pi/180)
 
-#calculate mean by ids
+# calculate mean by ids
 meanwind_id <- windall_df %>%
   mutate(date=date(timestamp))%>%
   group_by(ID, tag.local.identifier, date, direc)%>%
   dplyr::summarise(meanwind=mean(wind.speed),varwind=var(wind.speed), meanwd=mean(wind_dire_rad),varwd=var(wind_dire_rad))
 
-# Split by direction
+# split by direction
 meanwind_id_ls <- split(meanwind_id, meanwind_id$direc)
 
-# Create all pairwise combinations of dataframes for INBOUND commutes
+# create all pairwise combinations of dataframes for INBOUND commutes
 pairs_windin<- expand.grid(meanwind_id_ls[[1]]$ID, meanwind_id_ls[[1]]$ID)
 pairs_windin <- subset(pairs_windin, Var1 != Var2)
 
-# Rename columns in pairs_windout for clarity
+# rename columns in pairs_windout for clarity
 names(pairs_windin) <- c("Pair1", "Pair2")
 
-# Merge pairs_windout with the original data twice, for ID1 and ID2
+# merge pairs_windin with the original data twice, for ID1 and ID2
 pairs_windin <- merge(pairs_windin, meanwind_id_ls[[1]], by.x = "Pair1", by.y = "ID", suffixes = c("_Pair1", ""))
 pairs_windin <- merge(pairs_windin, meanwind_id_ls[[1]], by.x = "Pair2", by.y = "ID", suffixes = c("_Pair1", "_Pair2"))
 
@@ -78,8 +78,7 @@ pairs_wind <- rbind(pairs_windout,pairs_windin)
 distsim_all <- merge(distsim_all, pairs_wind[, c("Pair1", "Pair2","direc", "windspDf", "windspVar", "meanwd","varwd")], 
                      by = c("Pair1", "Pair2", "direc"), all.x = TRUE)
 
-
-### calculate crosswind and windsupport
+### calculate crosswind and wind support
 meanws <- windall_df %>%
     mutate(date=date(timestamp))%>%
     filter(date<"2022-02-28")%>%
@@ -96,55 +95,56 @@ meancw_ws <- windall_df %>%
 
 meancw_ws_id_ls <- split(meancw_ws, meancw_ws$direc)
 
-# Create all pairwise combinations of dataframes for INBOUND commutes
+# create all pairwise combinations of dataframes for INBOUND commutes
 pairs_cwws_in<- expand.grid(meancw_ws_id_ls[[1]]$ID, meancw_ws_id_ls[[1]]$ID)
 pairs_cwws_in <- subset(pairs_cwws_in, Var1 != Var2)
 
-# Rename columns in pairs_windout for clarity
+# rename columns in pairs_windout for clarity
 names(pairs_cwws_in) <- c("Pair1", "Pair2")
 
-# Merge pairs_windout with the original data twice, for ID1 and ID2
+# merge pairs_windout with the original data twice, for ID1 and ID2
 pairs_cwws_in <- merge(pairs_cwws_in, meancw_ws_id_ls[[1]], by.x = "Pair1", by.y = "ID", suffixes = c("_Pair1", ""))
 pairs_cwws_in <- merge(pairs_cwws_in, meancw_ws_id_ls[[1]], by.x = "Pair2", by.y = "ID", suffixes = c("_Pair1", "_Pair2"))
 
-# Calculate the absolute difference in meanwind for each pair
+# calculate the absolute difference in meanwind for each pair
 pairs_cwws_in$difCW <- abs(pairs_cwws_in$meancw_Pair1 - pairs_cwws_in$meancw_Pair2)
 pairs_cwws_in$difWS <- abs(pairs_cwws_in$meanws_Pair1 - pairs_cwws_in$meanws_Pair2)
 pairs_cwws_in$varCW <- abs(pairs_cwws_in$varcw_Pair1 - pairs_cwws_in$varcw_Pair2)
 pairs_cwws_in$varWS <- abs(pairs_cwws_in$varws_Pair1 - pairs_cwws_in$varws_Pair2)
 colnames(pairs_cwws_in)[5] <- "direc"
 
-
-# Create all pairwise combinations of dataframes for OUTBOUND commutes
+# create all pairwise combinations of dataframes for OUTBOUND commutes
 pairs_cwws_out<- expand.grid(meancw_ws_id_ls[[2]]$ID, meancw_ws_id_ls[[2]]$ID)
 pairs_cwws_out <- subset(pairs_cwws_out, Var1 != Var2)
 
-# Rename columns in pairs_windout for clarity
+# rename columns in pairs_windout for clarity
 names(pairs_cwws_out) <- c("Pair1", "Pair2")
 
-# Merge pairs_windout with the original data twice, for ID1 and ID2
+# merge pairs_windout with the original data twice, for ID1 and ID2
 pairs_cwws_out <- merge(pairs_cwws_out, meancw_ws_id_ls[[2]], by.x = "Pair1", by.y = "ID", suffixes = c("_Pair1", ""))
 pairs_cwws_out <- merge(pairs_cwws_out, meancw_ws_id_ls[[2]], by.x = "Pair2", by.y = "ID", suffixes = c("_Pair1", "_Pair2"))
 
-# Calculate the absolute difference in meanwind for each pair
+# calculate the absolute difference in meanwind for each pair
 pairs_cwws_out$difCW <- abs(pairs_cwws_out$meancw_Pair1 - pairs_cwws_out$meancw_Pair2)
 pairs_cwws_out$difWS <- abs(pairs_cwws_out$meanws_Pair1 - pairs_cwws_out$meanws_Pair2)
 pairs_cwws_out$varCW <- abs(pairs_cwws_out$varcw_Pair1 - pairs_cwws_out$varcw_Pair2)
 pairs_cwws_out$varWS <- abs(pairs_cwws_out$varws_Pair1 - pairs_cwws_out$varws_Pair2)
 colnames(pairs_cwws_out)[5] <- "direc"
 
-# Merge the two data frames
+# merge the two data frames
 pairs_cwws_inout <- rbind(pairs_cwws_out,pairs_cwws_in)
 
-# Merge distsim_all with pairs_wind on Pair1 and Pair2
+# merge distsim_all with pairs_wind on Pair1 and Pair2
 distsim_all <- merge(distsim_all, pairs_cwws_inout[, c("Pair1", "Pair2","direc", "difCW","difWS", "varCW","varWS")], 
                      by = c("Pair1", "Pair2", "direc"), all.x = TRUE)
 
 
 distsim_all_sameid <- distsim_all %>%
   filter(sameid=="yes")
- 
-# Plot mean wind speed
+```
+### Plot wind speed against DTW distance within individuals all tracking periods
+```{r}
+# plot mean wind speed
 winddif_dist <- ggplot(aes(x=windspDf, y=log(Distance)),data=distsim_all_sameid)+
   geom_point()+
   theme_classic()+
@@ -159,6 +159,7 @@ winddif_dist <- ggplot(aes(x=windspDf, y=log(Distance)),data=distsim_all_sameid)
   facet_wrap(.~direc)+
   geom_smooth(method="lm")
 
+#variance in wind speed
 winddif_var <- ggplot(aes(x=windspVar, y=log(Distance)),data=distsim_all_sameid)+
   geom_point()+
   theme_classic()+
@@ -172,41 +173,10 @@ winddif_var <- ggplot(aes(x=windspVar, y=log(Distance)),data=distsim_all_sameid)
         plot.title= element_text(size = 20))+
   facet_wrap(.~direc)+
   geom_smooth(method="lm")
-
-### wind direction
-# winddirec_mean <- ggplot(aes(x=meanwd, y=log(Distance)),data=distsim_all_sameid)+
-#   geom_point()+
-#   theme_classic()+
-#   ylab("Pairwise DTW distance of \n commutes within ids")+
-#   xlab("Mean wind direction \n difference (rad)")+
-#   theme(axis.title = element_text(face = 'bold', size=20), 
-#         axis.title.x = element_text(size = 24), 
-#         axis.title.y=element_text(size=24), 
-#         axis.text.y = element_text(size=20), 
-#         axis.text.x = element_text(size=20),
-#         legend.title =element_text(size=20),
-#         legend.text = element_text(size=18)
-#         )+
-#   facet_wrap(.~direc)+
-#   geom_smooth(method="lm", color="black")
-# 
-# winddirec_var <- ggplot(aes(x=varwd, y=log(Distance)),data=distsim_all_sameid)+
-#   geom_point()+
-#   theme_classic()+
-#   ylab("Pairwise DTW distance of \n commutes within ids")+
-#   xlab("Variance wind direction \n difference (rad)")+
-#   theme(axis.title = element_text(face = 'bold', size=20), 
-#         axis.title.x = element_text(size = 24), 
-#         axis.title.y=element_text(size=24), 
-#         axis.text.y = element_text(size=20), 
-#         axis.text.x = element_text(size=20),
-#         legend.title =element_text(size=20),
-#         legend.text = element_text(size=18)
-#         )+
-#   facet_wrap(.~direc)+
-#   geom_smooth(method="lm", color="black")
-
-# Plot cross wind
+```
+### Plot crosswind and DTW distance within individuals all tracking periods
+```{r}
+# plot mean cross wind 
 cwdiff_dist <-ggplot(aes(x=difCW, y=log(Distance)),data=distsim_all_sameid)+
   geom_point()+
   theme_classic()+
@@ -221,7 +191,7 @@ cwdiff_dist <-ggplot(aes(x=difCW, y=log(Distance)),data=distsim_all_sameid)+
   facet_wrap(.~direc)+
   geom_smooth(method="lm")
 
-
+# plot variance cross wind 
 cwvar_dist <-ggplot(aes(x=varCW, y=log(Distance)),data=distsim_all_sameid)+
   geom_point()+
   theme_classic()+
@@ -235,9 +205,10 @@ cwvar_dist <-ggplot(aes(x=varCW, y=log(Distance)),data=distsim_all_sameid)+
         plot.title= element_text(size = 20))+
   facet_wrap(.~direc)+
   geom_smooth(method="lm")
-
-
-# Plot wind support
+```
+### Plot wind suppport against DTW distance within individuals all tracking periods
+```{r}
+# plot wind support
 wsdiff_dist <- ggplot(aes(x=difWS, y=log(Distance)),data=distsim_all_sameid)+
   geom_point()+
   theme_classic()+
@@ -252,7 +223,7 @@ wsdiff_dist <- ggplot(aes(x=difWS, y=log(Distance)),data=distsim_all_sameid)+
   facet_wrap(.~direc)+
   geom_smooth(method="lm")
   
-
+# plot variance in wind support
 wsvar_dist <-ggplot(aes(x=varWS, y=log(Distance)),data=distsim_all_sameid)+
   geom_point()+
   theme_classic()+
@@ -270,7 +241,9 @@ wsvar_dist <-ggplot(aes(x=varWS, y=log(Distance)),data=distsim_all_sameid)+
 winddif_dist 
 ```
 
-### Plot of wind variables
+### Plot of wind variables together to see possible relationship
+
+It looks like there might be an influence of wind support and crosswind to DTW distance por all individuals
 ```{r}
 # mean plot wind variables
 wsdiff_dist / cwvar_dist + plot_layout(axes="collect_y") + plot_annotation(tag_levels = "A")
@@ -288,7 +261,7 @@ ggsave(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis
 
 ```
 
-### Test that pairwise distance have no relationship with wind
+### Test DTW pairwise distance relationship with wind support and crosswind
 ```{r}
 #Test with a linear regression
 cor_matrix <- cor(distsim_all_sameid[, c("windspDf", "difCW", "difWS", "windspVar", "varCW", "varWS")], use = "complete.obs")
@@ -320,7 +293,7 @@ car::Anova(model_path_ws_var)
 plot(model_path_ws_var)  
 
 #Best fit
-AIC(model_path_wsp_mean,model_path_ws,model_path_ws_var)
+AIC(model_path_wsp_mean,model_path_ws,model_path_ws_var) # best model fit is the wind support and crosswind mean difference
 
 ```
 
@@ -403,7 +376,7 @@ cw_dist <- ggplot() +
   facet_wrap(.~direc,scales = "free")
 ```
 
-### Plot Figure 2 of wind varibales and dtw distance similarity
+### Plot Figure of wind variables and DTW distance similarity
 ```{r}
 # plot
 ws_dist / cw_dist + plot_layout(axes="collect_y") + plot_annotation(tag_levels = "A")

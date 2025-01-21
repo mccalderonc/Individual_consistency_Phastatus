@@ -6,13 +6,11 @@ output: html_document
 ---
 
 ### Load packages
-
 ```{r setup}
 pacman::p_load(lubridate, dplyr, ggplot2, tidyverse, plyr, Rmisc)
 ```
 
 ### Loading data
-
 ```{r}
 load(file="~/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/data/bocas_2022-2023HMMbehaviors.RData")
 
@@ -93,7 +91,6 @@ z <- count(x$Var1[which(x$Freq>0)])
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 # levels of the cave groups
-
 pos <- position_dodge(0.9)
 
 # plot Fig S2
@@ -188,7 +185,7 @@ pairwise_interaction <- pairs(emm_interaction, adjust = "tukey")
 pairwise_interaction
 
 ```
-### make plot of foraging time vs deoarture time with fitted values of the model
+### Make plot of foraging time vs departure time with fitted values of the model
 ```{r}
 # Create new prediction data
 new_data <- data.frame(
@@ -236,51 +233,6 @@ ggplot() +
 
 
 ggsave(file="/Users/ccalderon/ownCloud/PhDLife/P.hastatus/Thesis/Paper3/analysis/figures/FigS6.pdf")
-  
 ```
-### Tess tepreatability for individuals in the dry season -1
 
-```{r}
-behav.time.forFeb <- behav.time.foraging%>%
-  filter(year_cave=="2022_lagruta_Feb")%>%
-  mutate(date=str_sub(ID, 12))
-  
-behav.time.forFeb$date <- as.factor(behav.time.forFeb$date)
-hist(behav.time.forFeb$time.min)
-
-model_check <- lmer(time.min ~ date + (1 | tag_local_identifier), data = behav.time.forFeb)
-summary(model_check)
-
-rep_foraging<- rpt(time.min~ date + (1|tag_local_identifier), grname = c("tag_local_identifier","Residual","Fixed"), 
-    data = behav.time.forFeb, datatype = "Gaussian", nboot = 1000, npermut = 0, ratio = FALSE, adjusted = FALSE)
-
-print(rep_foraging)
-1453/(2301.76+1650.684)
-
-
-plot(rep_foraging, grname = "tag_local_identifier", scale = "probit")
-
-#index of individual repeatabilitu
-# Add residuals to the original data
-# Extract residuals from the model
-model_residuals <- residuals(rep_foraging$mod)
-behav.time.forFeb$residuals <- model_residuals
-mean_res <- mean(behav.time.forFeb$residuals, na.rm=TRUE)
-
-# Calculate intraindividual variance for each individual (within-individual variance per individual)
-intraindividual_variance <- behav.time.forFeb %>%
-  group_by(tag_local_identifier) %>%
-  dplyr::summarise(S_ind =mean(residuals - mean_res,na.rm = TRUE)^2)
-
-print(intraindividual_variance)
-
-# Calculate individual-level repeatability for each individual
-intraindividual_repeatability <- intraindividual_variance %>%
-  mutate(R_ind = interindividual_variance / (interindividual_variance + S_ind))
-
-# Print the individual-level repeatability values
-print(intraindividual_repeatability)
-mean(intraindividual_repeatability$R_ind, na.rm=TRUE)
-sd(intraindividual_repeatability$R_ind, na.rm=TRUE)
-```
 

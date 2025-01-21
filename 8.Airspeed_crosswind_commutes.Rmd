@@ -4,6 +4,8 @@ author: "Camila Calderon"
 date: "2025-01-13"
 output: html_document
 ---
+
+
 ```{r setup, include=FALSE}
 pacman::p_load(lubridate,ggplot2,tidyverse,mapview, circular, ggridges, ggmap, ggnewscale, ggspatial)
 ```
