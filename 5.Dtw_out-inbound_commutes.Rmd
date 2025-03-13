@@ -515,6 +515,7 @@ result_dist_feb_in_sub <- result_dist_feb_in %>%
 result_dist_feb_in_sub$Pair1 <- droplevels(result_dist_feb_in_sub$Pair1)
 result_dist_feb_in_sub$Pair2 <- droplevels(result_dist_feb_in_sub$Pair2)
 ```
+
 ### Quickly plot a cluster for all to visualize inbound commute sin February 2022
 ```{r}
 set.seed(1)
